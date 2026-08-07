@@ -1,6 +1,10 @@
 ---
 name: create-readme
 description: 'Create a README.md file for the project'
+triggers:
+  - Requests to create or rewrite a repository README.md
+  - Requests to improve README structure, clarity, or onboarding flow
+  - Requests to validate README formatting or markdown quality
 ---
 
 # Create README
@@ -49,8 +53,10 @@ Use this skill when the request asks to:
    inside the container, then pass that file to `markdownlint` with `-c`. Use image
    `ghcr.io/igorshubovych/markdownlint-cli:latest`. Do not reference the config file
    directly from the host path. Use this same pattern in every README-validation example.
-12. Check README.md that it contains valid markdown.
-13. Prefer local tooling examples only when the required binary is known to be installed.
+12. Validate `README.md` by running the markdownlint workflow in this skill;
+   treat a passing markdownlint run as the baseline markdown-validity check.
+13. Prefer local tooling examples only when the required binary is known to be
+   installed and no rule below requires a specific container image.
 14. If a required tool is missing, provide containerized commands using `docker run`.
 15. When using `docker run`, include `-u $(id -u)`.
 16. Do not use `--pull=always` in Docker commands unless explicitly requested.
@@ -59,33 +65,38 @@ Use this skill when the request asks to:
 19. For helm-unittest examples, use `helmunittest/helm-unittest` as container image.
 20. For helm-unittest Docker commands, set a writable cache path with
    `-e HELM_CACHE_HOME=/tmp/helm/.config`.
-21. For `yq`, `kubectl`, or `hetzner-k3s` examples, use
-   `ghcr.io/steadforce/steadops/workbenches/k8s:main` as container image.
+21. For `yq`, `kubectl`, or `hetzner-k3s` examples outside the workbench flow,
+   use `ghcr.io/steadforce/steadops/workbenches/k8s:main` by default, even if
+   local binaries are available.
 22. When commands are documented to run inside the
    `SteadOps-Steadies-K8s-Workplace` workbench, document the available tools
-   for that flow (for example `helm`, `yq`, `kubectl`, and `act`) and show
-   commands using those tools directly from the workbench shell.
-23. Ensure generated files end with exactly one trailing newline.
-24. For charts that package and configure dependencies, use the term
+   for that flow (for example `helm`, `yq`, `kubectl`, `hetzner-k3s`, and
+   `act`) and show commands using those tools directly from the workbench shell.
+23. In workbench flow snippets, run `kubectl`, `yq`, and `hetzner-k3s`
+   directly (no `docker run` wrapper around those commands).
+24. Ensure generated files end with exactly one trailing newline.
+25. For charts that package and configure dependencies, use the term
    `umbrella chart` and avoid `wrapper chart`.
-25. As the final step, draft a commit message that matches repository commit
+26. As the final step, draft a commit message that matches repository commit
    conventions and summarizes the README change.
-26. Use the `commit-messages` skill when drafting that message.
-27. Detect project convention before drafting:
+27. Use the `commit-messages` skill when drafting that message.
+28. Detect project convention before drafting:
    - check repository-specific guidance (for example `.github/copilot-instructions.md`)
    - inspect recent history with `git log --oneline -20`
-28. Commit message style requirements:
+29. Commit message style requirements:
    - subject is imperative, capitalized, and <= 72 characters
    - subject does not end with a period
    - add a blank line, then a body that explains why
    - wrap body lines at about 72 characters when practical
    - keep the commit atomic; if subject naturally needs "and", split changes
-29. In large multi-repository workspaces, use terminal discovery commands only
+30. In large multi-repository workspaces, use terminal discovery commands only
     within the target repository (for example `grep -R`, `find`, `ls`).
     Do not use workspace-wide search tools unless explicitly requested.
-30. Use a human-readable main title (`# ...`) in Title Case for `README.md`
+31. Use a human-readable main title (`# ...`) in Title Case for `README.md`
     (for example `# External Secrets Deployment`) instead of a raw repository
     slug such as `# external-secrets-deployment`.
+32. Use Title Case for README section headings (`##`, `###`) unless the target
+    repository already enforces a different heading style.
 
 ## Deliverable expectations
 
