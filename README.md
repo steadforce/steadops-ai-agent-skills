@@ -79,3 +79,29 @@ Example prompt:
      markdownlint -c /tmp/markdownlint.json README.md
    '
 ```
+
+## Optional automated skill validation
+
+This repository includes an optional validation workflow at
+`.github/workflows/optional-skill-validation.yml`.
+
+- Run it manually via **Actions** using `workflow_dispatch` whenever you
+  want an automated check.
+
+The workflow validates:
+
+- Markdown formatting against `.markdownlint.json`
+- Skill frontmatter in `.github/skills/*/SKILL.md`
+
+Run the same checks locally:
+
+```sh
+ ./scripts/validate-skills-frontmatter.sh
+
+ docker run --rm -u $(id -u) \
+   -v "$(pwd):/apps" \
+   -w /apps \
+   ghcr.io/igorshubovych/markdownlint-cli:latest \
+   "**/*.md" \
+   --config .markdownlint.json
+```

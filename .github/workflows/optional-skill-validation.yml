@@ -1,0 +1,23 @@
+name: Optional skill markdown and frontmatter validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  validate-skills:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Validate skill frontmatter
+      run: ./scripts/validate-skills-frontmatter.sh
+
+    - name: Validate markdown files
+      run: |
+        docker run --rm -u "$(id -u)" \
+          -v "$PWD:/apps" \
+          -w /apps \
+          ghcr.io/igorshubovych/markdownlint-cli:latest \
+          "**/*.md" \
+          --config .markdownlint.json
