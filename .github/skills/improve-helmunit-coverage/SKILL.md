@@ -85,6 +85,9 @@ Coverage accounting rule:
    - keep scope to root-level value files from the repository unless explicitly requested otherwise
    - compare discovered root environment value files (for example `values-<env>.yaml`) with configured environments
    - if a matching environment is missing in `helm-config.yaml`, add it with the correct `apis` and `valueFiles`
+   - for every environment whose name encodes a stage (for example a `-dev` or `-prod` suffix), verify its
+     `valueFiles` list actually references the correspondingly named stage file (`values-development.yaml` vs
+     `values-production.yaml`) and not a mismatched one — see "Validating helm-config.yaml value file wiring" below
 5. Map overridden values to rendered outputs:
    - inspect templates directly
    - inspect dependency chart templates if behavior comes from a subchart
