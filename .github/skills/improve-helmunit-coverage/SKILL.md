@@ -115,21 +115,56 @@ Steps:
    - packaged form: `charts/<name>-<version>.tgz`
    - extracted form: `charts/<name>/Chart.yaml` (read its own `version` field)
 3. Compare the version found in `charts/` against the version declared in the root `Chart.yaml`.
-4. The quickest scoped check is the Helm CLI itself, run from the chart root:
+4. The quickest scoped check is the Helm CLI itself, run with an isolated, disposable Helm environment (see
+   "Isolating Helm's config, cache, and data dirs" below) from the chart root:
 
    ```sh
-   helm dependency list .
+   HELM_TMP=$(mktemp -d)
+   HOME="$HELM_TMP" helm dependency list .
+   rm -rf "$HELM_TMP"
    ```
 
    Its `STATUS` column reports `ok` when the downloaded chart matches, or flags it when it does not
    (for example missing or out of date). Treat anything other than `ok` as a mismatch.
-5. If a mismatch is found:
+5. If the packaged form's filename does not clearly encode the version, unpack the `.tgz` into a temp directory to
+   read the version straight from its own `Chart.yaml` — never into `charts/` itself (see "Unpacking a packaged
+   `.tgz` dependency" below).
+6. If a mismatch is found:
    - report it clearly before doing anything else (do not silently proceed as if coverage were reliable)
    - do not run `helm dependency update` or otherwise modify `charts/`, `Chart.yaml`, or `Chart.lock` without asking
      the user first — resolving the mismatch is a separate decision from adding test coverage
    - if the user asks you to resolve it, use `helm dependency update .` and confirm the resulting `charts/` contents
      and `Chart.lock` afterward
-6. If versions match, note that the check passed and continue with the normal workflow.
+7. If versions match, note that the check passed and continue with the normal workflow.
+
+### Unpacking a packaged `.tgz` dependency
+
+When a packaged dependency needs to be opened to confirm its version, extract it into a scratch temp directory and
+remove it afterward — never extract it into `charts/`. An extracted copy left next to the `.tgz` changes Helm's
+build/hydration behavior and must never be committed.
+
+```sh
+tgz_tmp=$(mktemp -d)
+tar -xzf charts/<name>-*.tgz -C "$tgz_tmp"
+grep '^version:' "$tgz_tmp/<name>/Chart.yaml"
+rm -rf "$tgz_tmp"
+```
+
+### Isolating Helm's config, cache, and data dirs
+
+Never let a local `helm` command read from or write to the invoking user's real Helm state
+(`~/.config/helm`, `~/.cache/helm`, `~/.local/share/helm`). Point Helm at a scratch temp directory instead, the same
+way the Docker validation commands already isolate `HOME` (see "Validation commands" below):
+
+```sh
+HELM_TMP=$(mktemp -d)
+HOME="$HELM_TMP" helm dependency list .
+rm -rf "$HELM_TMP"
+```
+
+Setting `HOME` is enough because Helm derives `HELM_CONFIG_HOME`, `HELM_CACHE_HOME`, and `HELM_DATA_HOME` from it
+by default; set those variables individually instead only if `HOME` cannot be overridden in the current
+environment. Always remove the temp directory afterward.
 
 ## What to test directly
 
@@ -371,6 +406,10 @@ instead of reporting it as a gap.
 - silently proceeding with coverage work when a dependency version mismatch was found instead of reporting it first
 - running `helm dependency update` or otherwise modifying `charts/`, `Chart.yaml`, or `Chart.lock` without asking
   the user first
+- extracting a packaged `.tgz` dependency directly into `charts/` instead of a disposable temp directory
+- leaving unpacked `.tgz` scratch directories behind instead of removing them after the version check
+- running local `helm` commands against the invoking user's real `~/.config/helm`, `~/.cache/helm`, or
+  `~/.local/share/helm` instead of an isolated temp `HOME`
 - treating snapshots as sufficient for all important overrides
 - counting snapshot-only tests as override coverage
 - using vague suite or case names that do not describe the asserted behavior
