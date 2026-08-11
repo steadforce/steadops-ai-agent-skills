@@ -77,9 +77,14 @@ Coverage accounting rule:
    - `tests/*_test.yaml`
    - in large workspaces, run repository-scoped terminal search instead of global
      workspace search to avoid task queue limit errors
-2. Run Helm unittest to establish baseline.
-3. If snapshots fail due to intentional changes, update snapshots first to restore a clean baseline.
-4. Determine hydration scope from `helm-config.yaml`:
+2. Always verify downloaded chart dependencies before doing anything else:
+   - compare each dependency version present in the `charts/` folder against the version declared for it in
+     `Chart.yaml`
+   - do this on every run of this skill, regardless of whether the request mentions dependencies
+   - see "Validating downloaded chart dependency versions" below
+3. Run Helm unittest to establish baseline.
+4. If snapshots fail due to intentional changes, update snapshots first to restore a clean baseline.
+5. Determine hydration scope from `helm-config.yaml`:
    - identify all environments
    - identify which value files each environment uses
    - keep scope to root-level value files from the repository unless explicitly requested otherwise
@@ -88,14 +93,43 @@ Coverage accounting rule:
    - for every environment whose name encodes a stage (for example a `-dev` or `-prod` suffix), verify its
      `valueFiles` list actually references the correspondingly named stage file (`values-development.yaml` vs
      `values-production.yaml`) and not a mismatched one — see "Validating helm-config.yaml value file wiring" below
-5. Map overridden values to rendered outputs:
+6. Map overridden values to rendered outputs:
    - inspect templates directly
    - inspect dependency chart templates if behavior comes from a subchart
    - render templates locally if merge behavior is unclear
-6. Add or improve tests.
-7. Re-run Helm unittest until all suites pass.
-8. As the final step, use the `commit-messages` skill to draft and validate a message that matches repository
+7. Add or improve tests.
+8. Re-run Helm unittest until all suites pass.
+9. As the final step, use the `commit-messages` skill to draft and validate a message that matches repository
    conventions and summarizes the coverage changes.
+
+## Validating downloaded chart dependency versions
+
+Always check this, on every run of this skill, before adding or changing any tests — not only when the request
+mentions dependencies. Rendered subchart behavior depends on the actual code in `charts/`, so a stale or mismatched
+dependency silently invalidates any coverage added for that subchart.
+
+Steps:
+
+1. Read the `dependencies:` list in the root `Chart.yaml` (each entry's `name` and `version`).
+2. For each dependency, find its counterpart in the `charts/` folder:
+   - packaged form: `charts/<name>-<version>.tgz`
+   - extracted form: `charts/<name>/Chart.yaml` (read its own `version` field)
+3. Compare the version found in `charts/` against the version declared in the root `Chart.yaml`.
+4. The quickest scoped check is the Helm CLI itself, run from the chart root:
+
+   ```sh
+   helm dependency list .
+   ```
+
+   Its `STATUS` column reports `ok` when the downloaded chart matches, or flags it when it does not
+   (for example missing or out of date). Treat anything other than `ok` as a mismatch.
+5. If a mismatch is found:
+   - report it clearly before doing anything else (do not silently proceed as if coverage were reliable)
+   - do not run `helm dependency update` or otherwise modify `charts/`, `Chart.yaml`, or `Chart.lock` without asking
+     the user first — resolving the mismatch is a separate decision from adding test coverage
+   - if the user asks you to resolve it, use `helm dependency update .` and confirm the resulting `charts/` contents
+     and `Chart.lock` afterward
+6. If versions match, note that the check passed and continue with the normal workflow.
 
 ## What to test directly
 
@@ -314,6 +348,8 @@ When coverage changes are complete and tests are green:
 ## Deliverable expectations
 
 When done, report:
+- whether downloaded dependency chart versions in `charts/` matched the versions declared in `Chart.yaml`, and any
+  mismatch found
 - which value files were considered in scope
 - which override keys are explicitly covered now
 - which gaps remain, if any
@@ -330,6 +366,11 @@ instead of reporting it as a gap.
 
 ## Anti-patterns to avoid
 
+- skipping the `charts/` vs `Chart.yaml` dependency version check, or only running it when the request mentions
+  dependencies
+- silently proceeding with coverage work when a dependency version mismatch was found instead of reporting it first
+- running `helm dependency update` or otherwise modifying `charts/`, `Chart.yaml`, or `Chart.lock` without asking
+  the user first
 - treating snapshots as sufficient for all important overrides
 - counting snapshot-only tests as override coverage
 - using vague suite or case names that do not describe the asserted behavior
