@@ -65,37 +65,41 @@ Use this skill when the request asks to:
 19. For helm-unittest examples, use `helmunittest/helm-unittest` as container image.
 20. For helm-unittest Docker commands, set a writable cache path with
    `-e HELM_CACHE_HOME=/tmp/helm/.config`.
-21. For `yq`, `kubectl`, or `hetzner-k3s` examples outside the workbench flow,
+21. For any alpine/helm Docker command (dependency update, template, etc.), set
+   `-e HOME=/tmp` so Helm can write its cache when running as a non-root uid
+   (rule 15). Without it, Helm fails with `Error: mkdir /.cache: permission
+   denied`.
+22. For `yq`, `kubectl`, or `hetzner-k3s` examples outside the workbench flow,
    use `ghcr.io/steadforce/steadops/workbenches/k8s:main` by default, even if
    local binaries are available.
-22. When commands are documented to run inside the
+23. When commands are documented to run inside the
    `SteadOps-Steadies-K8s-Workplace` workbench, document the available tools
    for that flow (for example `helm`, `yq`, `kubectl`, `hetzner-k3s`, and
    `act`) and show commands using those tools directly from the workbench shell.
-23. In workbench flow snippets, run `kubectl`, `yq`, and `hetzner-k3s`
+24. In workbench flow snippets, run `kubectl`, `yq`, and `hetzner-k3s`
    directly (no `docker run` wrapper around those commands).
-24. Ensure generated files end with exactly one trailing newline.
-25. For charts that package and configure dependencies, use the term
+25. Ensure generated files end with exactly one trailing newline.
+26. For charts that package and configure dependencies, use the term
    `umbrella chart` and avoid `wrapper chart`.
-26. As the final step, draft a commit message that matches repository commit
+27. As the final step, draft a commit message that matches repository commit
    conventions and summarizes the README change.
-27. Use the `commit-messages` skill when drafting that message.
-28. Detect project convention before drafting:
+28. Use the `commit-messages` skill when drafting that message.
+29. Detect project convention before drafting:
    - check repository-specific guidance (for example `.github/copilot-instructions.md`)
    - inspect recent history with `git log --oneline -20`
-29. Commit message style requirements:
+30. Commit message style requirements:
    - subject is imperative, capitalized, and <= 72 characters
    - subject does not end with a period
    - add a blank line, then a body that explains why
    - wrap body lines at about 72 characters when practical
    - keep the commit atomic; if subject naturally needs "and", split changes
-30. In large multi-repository workspaces, use terminal discovery commands only
+31. In large multi-repository workspaces, use terminal discovery commands only
     within the target repository (for example `grep -R`, `find`, `ls`).
     Do not use workspace-wide search tools unless explicitly requested.
-31. Use a human-readable main title (`# ...`) in Title Case for `README.md`
+32. Use a human-readable main title (`# ...`) in Title Case for `README.md`
     (for example `# External Secrets Deployment`) instead of a raw repository
     slug such as `# external-secrets-deployment`.
-32. Use Title Case for README section headings (`##`, `###`) unless the target
+33. Use Title Case for README section headings (`##`, `###`) unless the target
     repository already enforces a different heading style.
 
 ## Deliverable expectations
@@ -122,8 +126,13 @@ Use the same pattern in every validation example in this skill.
 The canonical command is:
 
 ```sh
-docker run --rm -u $(id -u) --entrypoint sh \
-  -v /path/to/project:/apps -w /apps ghcr.io/igorshubovych/markdownlint-cli:latest -lc '
+docker run \
+  --entrypoint sh \
+  --rm \
+  -u $(id -u) \
+  -v /path/to/project:/apps \
+  -w /apps \
+  ghcr.io/igorshubovych/markdownlint-cli:latest -lc '
     cat > /tmp/markdownlint.json <<'"'"'JSON'"'"'
 {
   "default": true,
