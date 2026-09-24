@@ -36,8 +36,8 @@ Use this skill when the request asks to:
 ## Constraints
 
 - Do not change files other than `README.md` unless explicitly requested.
-  Validation artifacts are the only exception; clean them up as described in
-  the validation workflow.
+  Validation runs in a temporary copy of the working tree (see the validation
+  workflow), so it never changes the repository itself.
 - Do not commit; draft the commit message only, unless the user asks to commit.
 - Do not invent badges, logos, URLs, or behavior that the repository does not
   contain or confirm.
@@ -133,8 +133,14 @@ the existing README. Do not carry over statements you have not verified:
   are available. Exception: when `yq` only feeds a Helm command in the same
   container (for example deriving repositories for `helm dependency build`),
   use `alpine/helm`, which ships `yq`.
-- If the README documents markdown linting, document the same command that
-  the validation workflow runs for this repository.
+- In the workbench flow, `KUBECONFIG` is always set to a valid config, so
+  `kubectl` needs no extra setup. For containerized `kubectl` examples, pass
+  that config into the container, because `-u $(id -u)` leaves no home
+  directory with a kubeconfig:
+  `-e KUBECONFIG=/tmp/kubeconfig` and `-v "$KUBECONFIG:/tmp/kubeconfig:ro"`.
+- Document markdown linting only when the target repository has its own
+  markdownlint config, and then use the same command as its CI. Do not copy the
+  skill's inline heredoc config into a README.
 
 ### Helm Charts
 
@@ -254,10 +260,11 @@ Validate `README.md` with markdownlint, using image
 `"default": true` enables new rules automatically; when bumping it, check the
 new rules and update `references/markdownlint.json` in the same change.
 
-If the target repository has its own markdownlint config (for example
-`.markdownlint.json`, `.markdownlint.yaml`, or `.markdownlint-cli2.*`), lint
-with that config so the result matches the repository's CI, for example by
-passing `-c .markdownlint.json` to the same image.
+If the target repository has its own markdownlint config, lint with that
+config so the result matches the repository's CI. For `.markdownlint.json` or
+`.markdownlint.yaml`, pass `-c <file>` to the same image. For
+`.markdownlint-cli2.*` configs, which belong to the separate
+`markdownlint-cli2` tool, use the tool and image that the repository's CI uses.
 
 Otherwise, inline the skill config through a heredoc instead of mounting
 `references/markdownlint.json`: that file lives in this skill repository, not
@@ -288,24 +295,43 @@ JSON
    '
 ```
 
-A passing markdownlint run only proves the markdown is valid. Before writing the
-report, also execute the shell snippets documented in the README from the
-repository root and record the result of each.
+When markdownlint finds no file to lint, for example because the mounted path
+is not visible to the Docker daemon, it prints its usage text and still exits
+with 0. Treat usage output as a failed run, not as a pass.
 
-- Execute only commands that change nothing outside the working tree and
+A passing markdownlint run only proves the markdown is valid. Before writing the
+report, also execute the shell snippets documented in the README and record the
+result of each. Run them from the root of a temporary copy of the working tree,
+not from the repository itself. `helm dependency build` deletes archives in the
+gitignored `charts/` directory that do not match `Chart.lock`, and
+`helm dependency update` rewrites `Chart.lock`, so running in place can destroy
+local work that `git status` does not show. A copy also includes uncommitted
+changes, which a `git worktree` would not.
+
+Create the copy below the repository's `.git` directory, not in `/tmp`: in the
+workbench, Docker runs against the host daemon, so only paths shared with the
+host (such as the workspace) can be mounted, and `.git` is always writable and
+never shows up in `git status`. Run the block in a subshell with `set -eu`, so a
+failed `mktemp` stops the run instead of falling back to the repository itself:
+
+```sh
+ (
+   set -eu
+   validation_dir="$(mktemp -d "$(git rev-parse --absolute-git-dir)/readme-validation.XXXXXX")"
+   trap 'rm -rf "$validation_dir"' EXIT
+   tar --exclude=./.git -cf - . | tar -xf - -C "$validation_dir"
+   cd "$validation_dir"
+   # run the documented snippets here
+ )
+```
+
+- Execute only commands that change nothing outside the temporary copy and
   fetch only from chart or image registries: for example
   `helm dependency build` and `update`, `helm template`, helm-unittest, render
   loops, and markdownlint.
 - Do not execute commands that reach a cluster or cloud provider (for example
   `kubectl apply`, `kubectl delete`, `hetzner-k3s create`, or `helm install`)
   unless the user explicitly approves it. Report them as "not executed".
-- If a command changes tracked files (for example `helm dependency update`
-  rewriting `Chart.lock`), restore them afterwards with `git checkout -- <file>`.
-  Check `git status` first and restore only files that were unmodified before
-  the run, so local edits are never discarded.
-- Remove untracked files that the run created (for example new archives under
-  `charts/` from `helm dependency build`). Record what existed before the run,
-  and keep those files.
 - Run workbench-flow commands against an isolated Helm home so the user's repo
   list is neither used nor modified. Keep the installed plugins (for example
   helm-unittest) visible, because `HELM_PLUGINS` defaults to a path below
