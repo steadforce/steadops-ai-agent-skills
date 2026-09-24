@@ -1,10 +1,9 @@
 ---
 name: create-readme
-description: 'Create a README.md file for the project'
-triggers:
-  - Requests to create or rewrite a repository README.md
-  - Requests to improve README structure, clarity, or onboarding flow
-  - Requests to validate README formatting or markdown quality
+description: >-
+  Use when creating, rewriting, or validating a repository README.md,
+  especially for Helm umbrella chart repositories; enforces runnable,
+  verified examples.
 ---
 
 # Create README
