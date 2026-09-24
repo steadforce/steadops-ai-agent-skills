@@ -334,19 +334,30 @@ workbench, Docker runs against the host daemon, so only paths shared with the
 host (such as the workspace) can be mounted, and `.git` is always writable and
 never shows up in `git status`. Run the block in a subshell with `set -eu`, so a
 failed `mktemp` stops the run instead of falling back to the repository itself.
-For workbench-flow commands, also point Helm at an isolated home inside the copy,
-so the user's repo list is neither used nor modified; the trap removes it with
-the copy:
+For workbench-flow commands, also point Helm at an isolated home next to the
+copy, so the user's repo list is neither used nor modified. Keep the Helm home
+outside the copied chart directory: Helm treats every file there as part of the
+chart unless `.helmignore` excludes it, so a Helm home inside the copy would
+end up in `.Files`, `helm lint`, and packaged charts. Extract the README's
+fenced snippets into the validation directory too, then run them in README
+order with `bash "$validation_dir/blocks/<n>.sh"`. The trap removes everything:
 
 ```sh
  (
    set -eu
    validation_dir="$(mktemp -d "$(git rev-parse --absolute-git-dir)/readme-validation.XXXXXX")"
    trap 'rm -rf "$validation_dir"' EXIT
+   repo_copy="$validation_dir/repo"
+   helm_home="$validation_dir/helm"
+   mkdir "$repo_copy" "$validation_dir/blocks"
    git ls-files -z -co --exclude-standard |
-     tar --ignore-failed-read --null -T - -cf - | tar -xf - -C "$validation_dir"
-   cd "$validation_dir"
-   helm_home="$validation_dir/.helm"
+     tar --ignore-failed-read --null -T - -cf - | tar -xf - -C "$repo_copy"
+   awk -v d="$validation_dir/blocks" '
+     /^```(sh|shell|bash)$/ { n++; f = 1; next }
+     /^```/ { f = 0 }
+     f { print > (d "/" n ".sh") }
+   ' README.md
+   cd "$repo_copy"
    export HELM_CACHE_HOME="$helm_home/cache"
    export HELM_PLUGINS="$(helm env HELM_PLUGINS)"
    export \
