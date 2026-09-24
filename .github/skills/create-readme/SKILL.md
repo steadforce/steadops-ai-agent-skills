@@ -36,6 +36,8 @@ Use this skill when the request asks to:
 ## Constraints
 
 - Do not change files other than `README.md` unless explicitly requested.
+  Validation artifacts are the only exception; clean them up as described in
+  the validation workflow.
 - Do not commit; draft the commit message only, unless the user asks to commit.
 - Do not invent badges, logos, URLs, or behavior that the repository does not
   contain or confirm.
@@ -130,8 +132,8 @@ the existing README. Do not carry over statements you have not verified:
   are available. Exception: when `yq` only feeds a Helm command in the same
   container (for example deriving repositories for `helm dependency build`),
   use `alpine/helm`, which ships `yq`.
-- If the README documents markdown linting, use the markdownlint pattern from
-  the validation workflow.
+- If the README documents markdown linting, document the same command that
+  the validation workflow runs for this repository.
 
 ### Helm Charts
 
@@ -231,11 +233,18 @@ When done, report:
 ## Validation workflow
 
 Validate `README.md` with markdownlint, using image
-`ghcr.io/igorshubovych/markdownlint-cli:latest`. Inline the config through a
-heredoc instead of mounting `references/markdownlint.json`: that file lives in
-this skill repository, not in the target repository, so it is not available
-under `/apps`. `references/markdownlint.json` is the source of truth; keep the
-inline JSON identical to it. Run from the target repository root:
+`ghcr.io/igorshubovych/markdownlint-cli:latest`.
+
+If the target repository has its own markdownlint config (for example
+`.markdownlint.json`, `.markdownlint.yaml`, or `.markdownlint-cli2.*`), lint
+with that config so the result matches the repository's CI, for example by
+passing `-c .markdownlint.json` to the same image.
+
+Otherwise, inline the skill config through a heredoc instead of mounting
+`references/markdownlint.json`: that file lives in this skill repository, not
+in the target repository, so it is not available under `/apps`.
+`references/markdownlint.json` is the source of truth; keep the inline JSON
+identical to it. Run from the target repository root:
 
 ```sh
  docker run \
@@ -264,8 +273,10 @@ A passing markdownlint run only proves the markdown is valid. Before writing the
 report, also execute the shell snippets documented in the README from the
 repository root and record the result of each.
 
-- Execute only offline, read-only commands: for example `helm dependency build`
-  and `update`, `helm template`, helm-unittest, render loops, and markdownlint.
+- Execute only commands that change nothing outside the working tree and
+  fetch only from chart or image registries: for example
+  `helm dependency build` and `update`, `helm template`, helm-unittest, render
+  loops, and markdownlint.
 - Do not execute commands that reach a cluster or cloud provider (for example
   `kubectl apply`, `kubectl delete`, `hetzner-k3s create`, or `helm install`)
   unless the user explicitly approves it. Report them as "not executed".
@@ -273,6 +284,9 @@ repository root and record the result of each.
   rewriting `Chart.lock`), restore them afterwards with `git checkout -- <file>`.
   Check `git status` first and restore only files that were unmodified before
   the run, so local edits are never discarded.
+- Remove untracked files that the run created (for example new archives under
+  `charts/` from `helm dependency build`). Record what existed before the run,
+  and keep those files.
 - Run workbench-flow commands against an isolated Helm home so the user's repo
   list is neither used nor modified. Keep the installed plugins (for example
   helm-unittest) visible, because `HELM_PLUGINS` defaults to a path below
