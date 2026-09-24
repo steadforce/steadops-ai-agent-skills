@@ -100,6 +100,14 @@ the existing README. Do not carry over statements you have not verified:
   the values the chart itself defines; do not restate every nested subchart
   setting. Do not claim that it sets only some keys unless you checked all of
   them.
+- **Commands:** when the pipeline (or a reusable workflow it calls) runs an
+  equivalent command, compare the documented command's flags and arguments
+  with it. A snippet that runs successfully can still use a flag wrongly (for
+  example passing a value to the boolean `helm template --release-name`, which
+  only works because Helm takes the value as the positional release name).
+- **Tool defaults:** check claims about a tool's output, formats, or defaults
+  against its `--help` output in the image the README uses (for example
+  helm-unittest writes XUnit unless `-t JUnit` is passed with `-o`).
 
 ### Snippet Formatting
 
