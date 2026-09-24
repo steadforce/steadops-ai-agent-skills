@@ -50,8 +50,10 @@ Use this skill when the request asks to:
 ## Task
 
 Review the target repository, then create or update a well-structured
-`README.md`. Apply the groups below in order. Apply the Helm Charts group only
-when the repository contains a `Chart.yaml`.
+`README.md`. Work in this sequence: review the repository and verify claims,
+write the README, run the validation workflow, then report and draft the commit
+message. Apply the Helm Charts group only when the repository contains a
+`Chart.yaml`.
 
 ### Content
 
@@ -111,18 +113,31 @@ the existing README. Do not carry over statements you have not verified:
   relative order.
 - Mount the repository with `-v "$(pwd):/apps"` and `-w /apps`, and document
   that commands run from the repository root.
+- These formatting rules apply to top-level commands. Heredoc bodies and
+  commands inside `sh -c` scripts or loops are exempt where splitting them would
+  change behavior or hurt readability.
 
 ### Tooling And Containers
 
 - Always document a containerized flow with `docker run`, and include
   `-u $(id -u)`.
 - Additionally document the `SteadOps-Steadies-K8s-Workplace` workbench flow
-  when the repository's docs or CI already reference that workbench. In that
-  flow, list the available tools (for example `helm`, `yq`, `kubectl`,
-  `hetzner-k3s`, and `act`) and run them directly from the workbench shell,
+  when the repository's docs already reference that workbench or the user asks
+  for it. In that flow, list the available tools (for example `helm`, `yq`,
+  `kubectl`, `hetzner-k3s`, and `act`) and run them directly from the workbench shell,
   without a `docker run` wrapper.
 - Document other local binaries only when the repository states them as a
   prerequisite.
+- For `yq`, `kubectl`, or `hetzner-k3s` outside the workbench flow, use
+  `ghcr.io/steadforce/steadops/workbenches/k8s:main`, even if local binaries
+  are available. Exception: when `yq` only feeds a Helm command in the same
+  container (for example deriving repositories for `helm dependency build`),
+  use `alpine/helm`, which ships `yq`.
+- If the README documents markdown linting, document the same command that
+  the validation workflow runs for this repository.
+
+### Helm Charts
+
 - For Helm commands, use the `alpine/helm` image, and set `-e HOME=/tmp` on
   every invocation, including one-liners such as
   `alpine/helm dependency update .`. As a non-root uid, Helm otherwise fails
@@ -134,15 +149,6 @@ the existing README. Do not carry over statements you have not verified:
   `-e HELM_CACHE_HOME=/tmp/helm/.config`. The image sets `HELM_DATA_HOME`
   itself, so only the cache must be writable; without it the unittest plugin
   fails to load as a non-root uid.
-- For `yq`, `kubectl`, or `hetzner-k3s` outside the workbench flow, use
-  `ghcr.io/steadforce/steadops/workbenches/k8s:main`, even if local binaries
-  are available. Exception: when `yq` only feeds a Helm command in the same
-  container (for example deriving repositories for `helm dependency build`),
-  use `alpine/helm`, which ships `yq`.
-- If the README documents markdown linting, document the same command that
-  the validation workflow runs for this repository.
-
-### Helm Charts
 
 Use a README outline like this for umbrella chart repositories, and drop
 sections that do not apply:
@@ -186,8 +192,12 @@ the repositories from `Chart.yaml` the way the pipeline does:
   dependencies need no repo entry.
 - Pass `--force-update`, which makes the command idempotent, repoints a
   same-named repo to the URL in `Chart.yaml`, and matches the pipeline.
+- Dependencies with `repository: "@<alias>"` are skipped by this filter but
+  still need that repo registered; document the matching `helm repo add` for
+  them.
 
-Workbench flow, where `helm` and `yq` run directly:
+Workbench flow (include it when the workbench flow applies), where `helm` and
+`yq` run directly:
 
 ```sh
  yq 'explode(.) | .dependencies[] | select(.repository == "http*") | .name + " " + .repository' Chart.yaml |
@@ -240,7 +250,9 @@ When done, report:
 ## Validation workflow
 
 Validate `README.md` with markdownlint, using image
-`ghcr.io/igorshubovych/markdownlint-cli:latest`.
+`ghcr.io/igorshubovych/markdownlint-cli:v0.49.1`. The version is pinned because
+`"default": true` enables new rules automatically; when bumping it, check the
+new rules and update `references/markdownlint.json` in the same change.
 
 If the target repository has its own markdownlint config (for example
 `.markdownlint.json`, `.markdownlint.yaml`, or `.markdownlint-cli2.*`), lint
@@ -260,7 +272,7 @@ identical to it. Run from the target repository root:
    -u $(id -u) \
    -v "$(pwd):/apps" \
    -w /apps \
-   ghcr.io/igorshubovych/markdownlint-cli:latest -c '
+   ghcr.io/igorshubovych/markdownlint-cli:v0.49.1 -c '
     cat > /tmp/markdownlint.json <<'"'"'JSON'"'"'
 {
   "default": true,
@@ -297,7 +309,9 @@ repository root and record the result of each.
 - Run workbench-flow commands against an isolated Helm home so the user's repo
   list is neither used nor modified. Keep the installed plugins (for example
   helm-unittest) visible, because `HELM_PLUGINS` defaults to a path below
-  `HELM_DATA_HOME`, and remove the temporary directory afterwards:
+  `HELM_DATA_HOME`, and remove the temporary directory afterwards. The isolated
+  config home also has no registry login, so report dependencies from private
+  OCI registries as "not executed" instead of logging in:
 
 ```sh
  helm_home="$(mktemp -d)"
