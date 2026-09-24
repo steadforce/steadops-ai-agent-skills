@@ -56,6 +56,10 @@ when the repository contains a `Chart.yaml`.
 ### Content
 
 - Keep the README complete but concise; do not overuse emojis.
+- When updating an existing README, keep content that is still accurate (for
+  example maintainer-written sections, troubleshooting notes, and links), even
+  if the outline below has no place for it. Report every removed section and
+  the reason.
 - Take inspiration from these README files for structure and tone:
   - <https://raw.githubusercontent.com/Azure-Samples/serverless-chat-langchainjs/refs/heads/main/README.md>
   - <https://raw.githubusercontent.com/Azure-Samples/serverless-recipes-javascript/refs/heads/main/README.md>
@@ -90,7 +94,10 @@ the existing README. Do not carry over statements you have not verified:
   when the `gh` CLI is unavailable. Document what it actually does (for
   example opening one pull request per environment branch instead of
   committing to `main`, or sending notifications on Renovate branches).
-- **Values defaults:** list every key that `values.yaml` actually sets.
+- **Values defaults:** describe the top-level keys that `values.yaml` sets and
+  the values the chart itself defines; do not restate every nested subchart
+  setting. Do not claim that it sets only some keys unless you checked all of
+  them.
 
 ### Snippet Formatting
 
