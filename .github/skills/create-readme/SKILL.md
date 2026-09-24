@@ -227,21 +227,31 @@ JSON
 ```
 
 A passing markdownlint run only proves the markdown is valid. Before writing the
-report, also execute every shell snippet documented in the README from the
-repository root (for example dependency build and update, helm-unittest, and
-render loops) and record the result of each.
+report, also execute the shell snippets documented in the README from the
+repository root and record the result of each.
 
+- Execute only offline, read-only commands: for example `helm dependency build`
+  and `update`, `helm template`, helm-unittest, render loops, and markdownlint.
+- Do not execute commands that reach a cluster or cloud provider (for example
+  `kubectl apply`, `kubectl delete`, `hetzner-k3s create`, or `helm install`)
+  unless the user explicitly approves it. Report them as "not executed".
 - If a command changes tracked files (for example `helm dependency update`
   rewriting `Chart.lock`), restore them afterwards with `git checkout -- <file>`.
   Check `git status` first and restore only files that were unmodified before
   the run, so local edits are never discarded.
 - Run workbench-flow commands against an isolated Helm home so the user's repo
-  list is neither used nor modified:
+  list is neither used nor modified. Keep the installed plugins (for example
+  helm-unittest) visible, because `HELM_PLUGINS` defaults to a path below
+  `HELM_DATA_HOME`, and remove the temporary directory afterwards:
 
 ```sh
+ export HELM_PLUGINS="$(helm env HELM_PLUGINS)"
  helm_home="$(mktemp -d)"
  export \
    HELM_CACHE_HOME="$helm_home/cache" \
    HELM_CONFIG_HOME="$helm_home/config" \
    HELM_DATA_HOME="$helm_home/data"
+ # run the documented workbench-flow commands here
+ rm -rf "$helm_home"
+ unset HELM_CACHE_HOME HELM_CONFIG_HOME HELM_DATA_HOME HELM_PLUGINS
 ```
