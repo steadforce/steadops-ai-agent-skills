@@ -255,7 +255,8 @@ When done, report:
 - which files were changed
 - which validation command(s) were run, with final pass/fail counts
 - the result of each documented shell snippet, including those not executed
-- confirmation that every `alpine/helm` invocation in the README sets `-e HOME=/tmp`
+- for Helm charts, confirmation that every `alpine/helm` invocation in the README
+  sets `-e HOME=/tmp`
 - the output of the line-length check, including table rows
 - remaining documentation gaps, if any
 - drafted commit message text, how commit style was detected, and
@@ -309,29 +310,56 @@ with 0. Treat usage output as a failed run, not as a pass.
 
 A passing markdownlint run only proves the markdown is valid. Before writing the
 report, also execute the shell snippets documented in the README and record the
-result of each. Run them from the root of a temporary copy of the working tree,
-not from the repository itself. `helm dependency build` deletes archives in the
+result of each. Run each fenced snippet exactly as written, copied from
+`README.md` rather than retyped, so a typo or broken line continuation in the
+README cannot slip through. Only variants that the prose describes (for example
+"add `-t JUnit -o test-output.xml`") may be composed by hand; report those
+separately.
+
+Run the snippets from the root of a temporary copy of the working tree, not
+from the repository itself. `helm dependency build` deletes archives in the
 gitignored `charts/` directory that do not match `Chart.lock`, and
 `helm dependency update` rewrites `Chart.lock`, so running in place can destroy
-local work that `git status` does not show. A copy also includes uncommitted
-changes, which a `git worktree` would not.
+local work that `git status` does not show.
+
+Copy only tracked files and untracked files that are not ignored. That matches
+a fresh clone plus uncommitted changes, which a `git worktree` would not
+include. Leaving out ignored build output such as `charts/` also means that a
+README missing a setup step (for example `helm dependency build`) fails
+validation instead of passing on leftovers. `--ignore-failed-read` skips
+tracked files that were deleted locally.
 
 Create the copy below the repository's `.git` directory, not in `/tmp`: in the
 workbench, Docker runs against the host daemon, so only paths shared with the
 host (such as the workspace) can be mounted, and `.git` is always writable and
 never shows up in `git status`. Run the block in a subshell with `set -eu`, so a
-failed `mktemp` stops the run instead of falling back to the repository itself:
+failed `mktemp` stops the run instead of falling back to the repository itself.
+For workbench-flow commands, also point Helm at an isolated home inside the copy,
+so the user's repo list is neither used nor modified; the trap removes it with
+the copy:
 
 ```sh
  (
    set -eu
    validation_dir="$(mktemp -d "$(git rev-parse --absolute-git-dir)/readme-validation.XXXXXX")"
    trap 'rm -rf "$validation_dir"' EXIT
-   tar --exclude=./.git -cf - . | tar -xf - -C "$validation_dir"
+   git ls-files -z -co --exclude-standard |
+     tar --ignore-failed-read --null -T - -cf - | tar -xf - -C "$validation_dir"
    cd "$validation_dir"
+   helm_home="$validation_dir/.helm"
+   export HELM_CACHE_HOME="$helm_home/cache"
+   export HELM_PLUGINS="$(helm env HELM_PLUGINS)"
+   export \
+     HELM_CONFIG_HOME="$helm_home/config" \
+     HELM_DATA_HOME="$helm_home/data"
    # run the documented snippets here
  )
 ```
+
+Keep `HELM_PLUGINS` pinned as shown: it defaults to a path below
+`HELM_DATA_HOME`, so without it installed plugins such as helm-unittest
+disappear. Skip the Helm lines when `helm` is not installed locally, because
+containerized commands do not read these variables.
 
 - Execute only commands that change nothing outside the temporary copy and
   fetch only from chart or image registries: for example
@@ -340,21 +368,8 @@ failed `mktemp` stops the run instead of falling back to the repository itself:
 - Do not execute commands that reach a cluster or cloud provider (for example
   `kubectl apply`, `kubectl delete`, `hetzner-k3s create`, or `helm install`)
   unless the user explicitly approves it. Report them as "not executed".
-- Run workbench-flow commands against an isolated Helm home so the user's repo
-  list is neither used nor modified. Keep the installed plugins (for example
-  helm-unittest) visible, because `HELM_PLUGINS` defaults to a path below
-  `HELM_DATA_HOME`, and remove the temporary directory afterwards. The isolated
-  config home also has no registry login, so report dependencies from private
-  OCI registries as "not executed" instead of logging in:
-
-```sh
- helm_home="$(mktemp -d)"
- export HELM_CACHE_HOME="$helm_home/cache"
- export HELM_PLUGINS="$(helm env HELM_PLUGINS)"
- export \
-   HELM_CONFIG_HOME="$helm_home/config" \
-   HELM_DATA_HOME="$helm_home/data"
- # run the documented workbench-flow commands here
- rm -rf "$helm_home"
- unset HELM_CACHE_HOME HELM_CONFIG_HOME HELM_DATA_HOME HELM_PLUGINS
-```
+- Do not execute `act` by default. It runs the repository's workflow steps,
+  which can push, deploy, or call webhooks; report it as "not executed" unless
+  the user approves it.
+- The isolated Helm home has no registry login, so report dependencies from
+  private OCI registries as "not executed" instead of logging in.
