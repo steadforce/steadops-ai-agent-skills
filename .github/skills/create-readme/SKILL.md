@@ -145,7 +145,13 @@ the existing README. Do not carry over statements you have not verified:
   `kubectl` needs no extra setup. For containerized `kubectl` examples, pass
   that config into the container, because `-u $(id -u)` leaves no home
   directory with a kubeconfig:
-  `-e KUBECONFIG=/tmp/kubeconfig` and `-v "$KUBECONFIG:/tmp/kubeconfig:ro"`.
+  `-e KUBECONFIG=/tmp/kubeconfig` and
+  `-v "${KUBECONFIG:-$HOME/.kube/config}:/tmp/kubeconfig:ro"`.
+  Outside the workbench, `KUBECONFIG` is often unset because `kubectl`
+  defaults to `~/.kube/config`; a bare `"$KUBECONFIG"` then fails with
+  `docker: invalid spec: :/tmp/kubeconfig:ro: empty section between colons`.
+  State in the README that `KUBECONFIG` must point to a single file, because a
+  colon-separated list also breaks the mount.
 - Document markdown linting only when the target repository has its own
   markdownlint config, and then use the same command as its CI. Do not copy the
   skill's inline heredoc config into a README.
