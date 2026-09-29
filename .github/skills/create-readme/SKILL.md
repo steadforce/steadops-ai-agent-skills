@@ -169,6 +169,15 @@ the existing README. Do not carry over statements you have not verified:
   `-e HELM_CACHE_HOME=/tmp/helm/.config`. The image sets `HELM_DATA_HOME`
   itself, so only the cache must be writable; without it the unittest plugin
   fails to load as a non-root uid.
+- When the workbench flow applies, document `helm unittest .` for it next to
+  the containerized command. The workbench image does not ship the
+  helm-unittest plugin; it only works because the workbench mounts `$HOME`,
+  so a plugin installed in the host's Helm home is available. State that, and
+  document the one-time install
+  `helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest.git`
+  (Helm 4 needs `--verify=false` for this unsigned plugin, as the pipeline
+  does). Do not claim that the workbench ships the plugin, and report the
+  install command as "not executed", because it changes the user's Helm home.
 
 Use a README outline like this for umbrella chart repositories, and drop
 sections that do not apply:
