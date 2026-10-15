@@ -17,6 +17,7 @@ Each skill provides a task-specific workflow, constraints, and quality checks to
 | `create-readme` | Create or rewrite `README.md` files with structure, validation, and runnable examples. |
 | `github-actions-efficiency` | Audit workflow execution and suggest changes that reduce CI minutes and cost. |
 | `improve-helmunit-coverage` | Improve Helm unittest coverage for values, environments, and snapshots. |
+| `istio-prod-promotion` | Promote an Istio version to production by moving the `prod` tag, step by step with checks. |
 | `refactor-helmunit-anchors` | Refactor Helm unittest suites with YAML anchors to reduce duplication. |
 | `security-review` | Run a structured security review workflow with dependency and exposure checks. |
 | `skill-review` | Review skill files for metadata quality, constraints, and internal consistency. |
@@ -49,6 +50,7 @@ Example prompt:
  │       ├── create-readme/
  │       ├── github-actions-efficiency/
  │       ├── improve-helmunit-coverage/
+│       ├── istio-prod-promotion/
  │       ├── refactor-helmunit-anchors/
  │       ├── security-review/
  │       └── skill-review/
