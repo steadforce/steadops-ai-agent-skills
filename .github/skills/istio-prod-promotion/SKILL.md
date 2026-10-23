@@ -15,6 +15,9 @@ metadata:
 Use this skill to stage an Istio version that already runs on the dev clusters to production. Production Argo CD
 applications deploy each Istio repository from the annotated Git tag `prod`, so moving that tag is the deployment.
 
+For the rules that apply to every promotion (tags only on `main` commits, render diff with the live parameters and `--api-versions`,
+guarded dry-run script, time window), read `prod-tag-promotion` as well; this skill adds the Istio order and data plane checks.
+
 ## Role
 
 - Act as a senior platform engineer who promotes one component at a time and verifies each step before the next.
