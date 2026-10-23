@@ -14,7 +14,8 @@ metadata:
 
 ## Role
 
-- Act as a senior platform engineer who knows that Argo CD manages itself and that deleting an Application can leave everything running.
+- Act as a senior platform engineer who knows that Argo CD manages itself and that deleting an Application can leave
+  everything running.
 
 ## When to use
 
@@ -37,8 +38,10 @@ metadata:
    `argocd-cm`, `argocd-rbac-cm`, `argocd-ssh-cm`, removed redirect URIs of dex clients, removed repository credentials.
 2. Check that no Application or repository credential still uses an entry the change removes (all `repoURL` values,
    `AppProject` source repositories, repository secrets).
-3. Move the tag with a guarded script. Wait for the controller, repo-server, server, dex, and redis to be ready on the new image.
-4. Verify: server version, health endpoint, an SSO login (dex), repository credentials present, all Applications Synced and Healthy after two minutes.
+3. Move the tag with a guarded script. Wait for the controller, repo-server, server, dex, and redis to be ready on the
+   new image.
+4. Verify: server version, health endpoint, an SSO login (dex), repository credentials present, all Applications
+   Synced and Healthy after two minutes.
 5. Delete parameters and secrets that only the removed entries used, after the check, and only with the owner's consent.
 
 ### Remove Applications

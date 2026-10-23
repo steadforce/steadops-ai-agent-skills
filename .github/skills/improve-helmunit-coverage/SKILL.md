@@ -24,6 +24,7 @@ environment-specific rendering, or snapshots are involved.
 ## When to use
 
 Use this skill for requests like:
+
 - "Improve Helm unittest coverage"
 - "Check Helm unittest coverage gaps"
 - "Add tests for overridden values"
@@ -41,10 +42,13 @@ Use this skill for requests like:
 
 ## Branch base and CI on main
 
-- Fetch the real remote `main` and branch from it (`git fetch origin main`, then `git switch -c <branch> FETCH_HEAD`), not from a stale local `main`; the test files and workflows of newer commits may be missing locally.
+- Fetch the real remote `main` and branch from it (`git fetch origin main`, then `git switch -c <branch> FETCH_HEAD`),
+  not from a stale local `main`; the test files and workflows of newer commits may be missing locally.
 - Search `tests/` as well as the templates before changing a value that tests may assert (image hosts, domains, names).
-- Run `helm unittest` locally before every push. After the merge, check the CI run on `main`: a rename that touches asserted values breaks `main` even when the pull request was green.
-- Argo CD renders with Helm 4, which drops values that are `null`; a Helm 3 unittest image may disagree. Compare the unittest plugin and Helm version with the one CI uses.
+- Run `helm unittest` locally before every push. After the merge, check the CI run on `main`: a rename that touches
+  asserted values breaks `main` even when the pull request was green.
+- Argo CD renders with Helm 4, which drops values that are `null`; a Helm 3 unittest image may disagree. Compare the
+  unittest plugin and Helm version with the one CI uses.
 
 ## Large workspace search strategy
 
@@ -67,11 +71,13 @@ Coverage should focus on behavior that can regress:
 5. Which are not covered by direct assertions at all?
 
 Do not assume every value in a values file must be tested. Only test values that:
+
 - affect rendered manifests
 - represent intentional platform or environment behavior
 - protect against likely regressions
 
 Coverage accounting rule:
+
 - only direct behavior assertions count as coverage for override behavior
 - snapshot-only checks are considered unscored support checks and must be paired with direct assertions
 
@@ -189,12 +195,14 @@ Only add tests for resources that consume those values. If a template is static 
 consume root value file configuration, treat it as out of scope for value file-driven coverage requests.
 
 Prefer exact assertions for:
+
 - booleans rendered as strings in configmaps
 - fixed labels or annotations
 - fixed host paths
 - presence or absence of named selectors
 
 Prefer regex assertions for:
+
 - resource presence or patterns
 - image prefixes/suffixes
 - content where exact formatting may vary
@@ -240,12 +248,14 @@ snapshot, make that explicit in the name. If it checks a specific behavior, name
 implying broader coverage.
 
 Examples of good direct assertions added in this session:
+
 - configmap key `data.NATIVE_NFTABLES`
 - owning-resource label derived from override values
 - worker affinity selector key presence or absence
 - k3s-specific CNI host paths derived from platform profile behavior
 
 Also from this session:
+
 - if a parent path is already asserted as absent, avoid adding redundant nested `notExists` assertions below that path
 - remove assertions that do not verify value-driven behavior and do not protect a realistic regression risk
 
@@ -254,6 +264,7 @@ Also from this session:
 When an environment has its own value file, test that environment explicitly.
 
 Examples:
+
 - if `values-sf-k8s03-dev.yaml` is in hydration scope, add tests that use it directly
 - if dev and prod share the same values file set, a shared test may be sufficient
 - if a cluster-specific values file changes behavior, avoid hiding it inside a generic dev/prod test
@@ -265,6 +276,7 @@ Examples:
 Be careful with Helm merge behavior.
 
 Important lesson from this session:
+
 - setting a nested map to `{}` may not remove inherited keys
 - setting the parent value to `~` can null out inherited configuration completely
 
@@ -283,6 +295,7 @@ This is appropriate when the intent is to remove inherited affinity entirely.
 Some templates are rendered only when specific API versions exist in Helm capabilities.
 
 When writing unittest coverage for these templates:
+
 - only add them for value file-driven coverage if the template consumes root value file settings
 - add `capabilities.apiVersions` in the suite so the template is rendered in tests
 - prefer direct assertions for core fields (apiVersion, kind, metadata.name, targetRef, update policy)
@@ -332,6 +345,7 @@ Examples:
 ## Refactoring and organization guidance
 
 When adding coverage:
+
 - prefer extending an existing suite for the same resource
 - avoid creating tiny one-off suite files if the tests belong naturally in an existing file
 - reuse anchors where sensible for templates, values, selectors, and assertion paths
@@ -390,6 +404,7 @@ When coverage changes are complete and tests are green:
 ## Deliverable expectations
 
 When done, report:
+
 - whether downloaded dependency chart versions in `charts/` matched the versions declared in `Chart.yaml`, and any
   mismatch found
 - which value files were considered in scope

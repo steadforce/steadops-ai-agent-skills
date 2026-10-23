@@ -34,7 +34,8 @@ on `environments/<cluster>` branches use `hydrated-deployment-status` instead; t
   auto-sync and prune a removed object is deleted at once, with prune off it only shows as out of sync).
 - Do not promote a commit you have not rendered and diffed. Do not promote `main` blindly after other pull requests merged.
 - Do not print tokens. Use `http.extraheader` or an `Authorization` header, never a token in a URL.
-- Move tags only inside the allowed time window (not during the node reboot window) and only with a token valid for two more hours.
+- Move tags only inside the allowed time window (not during the node reboot window) and only with a token valid for
+  two more hours.
 - Never reuse a confirm string from an earlier promotion; it contains the target commit.
 
 ## Workflow
@@ -46,7 +47,8 @@ Application. Compare the current `prod` commit (resolve with `^{commit}`) with `
 
 ```sh
 kubectl -n argocd get application <app> -o jsonpath='{.spec.source}{"\n"}{.status.sync.revision}{"\n"}'
-git fetch origin main 'refs/tags/prod:refs/tags/prod'
+git fetch origin main
+git fetch origin '+refs/tags/prod:refs/tags/prod'
 git log --oneline 'prod^{commit}..origin/main'
 ```
 
@@ -92,4 +94,5 @@ not undo (applied CRDs, pruned objects, restarted pods).
 
 ## Report
 
-Name the backup tag and commit, the new `prod` commit, the time, what changed, the verification result, and what is still open.
+Name the backup tag and commit, the new `prod` commit, the time, what changed, the verification result, and what is
+still open.

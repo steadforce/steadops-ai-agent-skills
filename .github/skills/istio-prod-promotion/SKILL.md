@@ -16,7 +16,8 @@ Use this skill to stage an Istio version that already runs on the dev clusters t
 applications deploy each Istio repository from the annotated Git tag `prod`, so moving that tag is the deployment.
 
 For the rules that apply to every promotion (tags only on `main` commits, render diff with the live parameters and `--api-versions`,
-guarded dry-run script, time window), read `prod-tag-promotion` as well; this skill adds the Istio order and data plane checks.
+guarded dry-run script, time window), read `prod-tag-promotion` as well; this skill adds the Istio order and data
+plane checks.
 
 ## Role
 
@@ -121,13 +122,15 @@ git fetch --force origin 'refs/tags/prod*:refs/tags/prod*'
 old=$(git rev-parse 'prod^{commit}')
 backup="prod-$(TZ=Europe/Berlin git for-each-ref --format='%(taggerdate:format-local:%Y%m%d-%H%M%S)' refs/tags/prod)"
 echo "$backup -> $old"
-git tag -a -m "Staged to prod" "$backup" "$old"
-git tag -a -f -m "Staged to prod" prod <target commit>
-git push origin "refs/tags/$backup"
-git push -f origin refs/tags/prod
+git tag -a -m "Staged to prod" "$backup" "$old" \
+  && git push origin "refs/tags/$backup" \
+  && [ "$(git ls-remote origin "refs/tags/$backup^{}" | cut -f1)" = "$old" ] \
+  && git tag -a -f -m "Staged to prod" prod <target commit> \
+  && git push -f origin refs/tags/prod
 ```
 
-Stop when `$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
+The chain moves `prod` only after the backup tag exists on the remote and points to `$old`. Do not split it into separate
+commands. Stop when `$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
 
 ### 5. Verify after each step
 
