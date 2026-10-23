@@ -94,6 +94,20 @@ new alerts, all other Applications healthy.
 Move `prod` back to the backup tag commit and push it; Argo CD restores the previous state. State what the rollback does
 not undo (applied CRDs, pruned objects, restarted pods).
 
+Roll back only if nobody promoted again in the meantime:
+
+```sh
+git fetch --force origin 'refs/tags/prod*:refs/tags/prod*'
+[ "$(git rev-parse 'prod^{commit}')" = "<target commit recorded for this rollout>" ] \
+  && expected_prod=$(git rev-parse refs/tags/prod) \
+  && git tag -a -f -m "Staged to prod" prod "<backup tag>^{commit}" \
+  && git push --force-with-lease="refs/tags/prod:$expected_prod" origin refs/tags/prod
+```
+
+Stop if the fetched `prod` commit differs from the recorded target: someone promoted again, and moving the tag back
+would undo that deployment. The lease protects against a move after the check. Record the full target commit when you
+promote.
+
 ## Report
 
 Name the backup tag and commit, the new `prod` commit, the time, what changed, the verification result, and what is
