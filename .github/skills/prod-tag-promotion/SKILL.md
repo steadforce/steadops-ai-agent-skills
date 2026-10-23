@@ -58,7 +58,8 @@ then compare each `prod` with `main`. Count only commits that touch more than te
 ### 2. Review the production render
 
 Render the current and the target commit with the production value files, the live Helm parameters, and inline values;
-diff per object (`kind/name`), not per line.
+diff per object, keyed by API group, kind, namespace, and name (`kind/name` alone merges objects of different
+namespaces or groups and hides changes), not per line.
 
 - Use the Helm major version of Argo CD and render from `git archive` copies inside the workspace; Docker cannot see
   the scratchpad. A missing value file is not an error when the application sets `ignoreMissingValueFiles`.

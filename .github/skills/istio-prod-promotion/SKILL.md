@@ -132,7 +132,8 @@ git tag -a -m "Staged to prod" "$backup" "$old" \
 
 The chain moves `prod` only after the backup tag exists on the remote and points to `$old`, and `--force-with-lease` makes
 the push fail when someone else moved `prod` after your fetch. Do not split it into separate commands and do not use a
-plain `-f`. Stop when `$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
+plain `-f`. Write down the full target commit of every
+repository; the rollback compares against it. Stop when `$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
 
 ### 5. Verify after each step
 
@@ -160,13 +161,15 @@ Move `prod` back to the commit of the backup tag and push it; Argo CD restores t
 
 ```sh
 git fetch --force origin 'refs/tags/prod*:refs/tags/prod*'
-expected_prod=$(git rev-parse refs/tags/prod)
-git tag -a -f -m "Staged to prod" prod "<backup tag>^{commit}" \
+[ "$(git rev-parse 'prod^{commit}')" = "<target commit recorded for this rollout>" ] \
+  && expected_prod=$(git rev-parse refs/tags/prod) \
+  && git tag -a -f -m "Staged to prod" prod "<backup tag>^{commit}" \
   && git push --force-with-lease="refs/tags/prod:$expected_prod" origin refs/tags/prod
 ```
 
-If the push is rejected, someone moved `prod` after your fetch. Read the new state before rolling back, so you do
-not undo a newer promotion.
+The first test compares the fetched `prod` commit with the full target commit you recorded when you promoted this
+repository. If it differs, someone promoted again: stop and review before rolling back, so you do not undo a newer
+promotion. The lease then protects against a move after that check. If the push is rejected, read the new state first.
 
 Roll back in reverse order (`istio-egress` → `istio-ingress` → `istio-deployment` → `istio-cni`). After rolling back
 istiod, restart the workloads again so the proxies match the control plane.
