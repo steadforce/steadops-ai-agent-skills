@@ -1,4 +1,7 @@
 #!/bin/sh
+# Validates the YAML frontmatter of every .github/skills/*/SKILL.md: it must parse as YAML, `name` and `description` must be
+# non-empty strings, `name` must equal the folder name, and the description must stay under 100 words.
+# Needs yq v4 (mikefarah); it is preinstalled on GitHub-hosted Ubuntu runners.
 
 set -eu
 
@@ -7,6 +10,11 @@ SKILLS_DIR="$ROOT_DIR/.github/skills"
 
 if [ ! -d "$SKILLS_DIR" ]; then
   echo "ERROR: Skills directory not found: $SKILLS_DIR" >&2
+  exit 1
+fi
+
+if ! command -v yq >/dev/null 2>&1; then
+  echo "ERROR: yq (https://github.com/mikefarah/yq) is required to parse the frontmatter" >&2
   exit 1
 fi
 
@@ -19,115 +27,46 @@ for skill_file in "$SKILLS_DIR"/*/SKILL.md; do
 
   skill_dir_name="$(basename "$(dirname "$skill_file")")"
 
-  parsed="$(
-    awk '
-      function trim(s) {
-        gsub(/^[[:space:]]+/, "", s)
-        gsub(/[[:space:]]+$/, "", s)
-        return s
-      }
-      BEGIN {
-        in_frontmatter = 0
-        have_frontmatter_start = 0
-        have_frontmatter_end = 0
-        line_count = 0
-      }
-      NR == 1 {
-        if ($0 == "---") {
-          in_frontmatter = 1
-          have_frontmatter_start = 1
-          next
-        }
-      }
-      {
-        if (in_frontmatter && $0 == "---") {
-          in_frontmatter = 0
-          have_frontmatter_end = 1
-          next
-        }
+  # frontmatter: the lines between the opening `---` on line 1 and the next `---`
+  frontmatter="$(awk '
+    NR == 1 { if ($0 == "---") { open = 1; next } else { exit } }
+    open && $0 == "---" { closed = 1; exit }
+    open { print }
+    END { if (!closed) exit 1 }
+  ' "$skill_file")" || {
+    echo "FAIL: $skill_file -> Missing or malformed YAML frontmatter" >&2
+    status=1
+    continue
+  }
 
-        if (in_frontmatter) {
-          line_count++
-          fm[line_count] = $0
-        }
-      }
-      END {
-        if (!have_frontmatter_start || !have_frontmatter_end) {
-          print "ERROR|Missing or malformed YAML frontmatter"
-          exit
-        }
-
-        name = ""
-        description = ""
-
-        for (i = 1; i <= line_count; i++) {
-          line = fm[i]
-
-          if (line ~ /^name:[[:space:]]*/) {
-            sub(/^name:[[:space:]]*/, "", line)
-            name = trim(line)
-            continue
-          }
-
-          if (line ~ /^description:[[:space:]]*/) {
-            sub(/^description:[[:space:]]*/, "", line)
-            line = trim(line)
-
-            if (line == ">" || line == ">-" || line == "|" || line == "|-") {
-              for (j = i + 1; j <= line_count; j++) {
-                if (fm[j] !~ /^[[:space:]]+/) {
-                  break
-                }
-                description = description " " trim(fm[j])
-              }
-              i = j - 1
-            } else {
-              description = line
-            }
-          }
-        }
-
-        if (name == "") {
-          print "ERROR|Missing frontmatter field: name"
-          exit
-        }
-
-        if (description == "") {
-          print "ERROR|Missing frontmatter field: description"
-          exit
-        }
-
-        token_count = split(description, words, /[[:space:]]+/)
-
-        if (token_count > 100) {
-          print "ERROR|description exceeds 100 tokens (" token_count ")"
-          exit
-        }
-
-        print "OK|" name "|" token_count
-      }
-    ' "$skill_file"
-  )"
-
-  result="$(printf '%s' "$parsed" | cut -d'|' -f1)"
-  message="$(printf '%s' "$parsed" | cut -d'|' -f2-)"
-
-  if [ "$result" = "ERROR" ]; then
-    echo "FAIL: $skill_file -> $message" >&2
+  # yq fails on malformed YAML; the select() keeps only non-empty strings, and -e makes a missing value an error
+  if ! name="$(printf '%s\n' "$frontmatter" | yq -e '.name | select(tag == "!!str" and length > 0)' 2>/dev/null)"; then
+    echo "FAIL: $skill_file -> frontmatter is not valid YAML or field name is not a non-empty string" >&2
     status=1
     continue
   fi
 
-  name_field="$(printf '%s' "$parsed" | cut -d'|' -f2)"
-  desc_tokens="$(printf '%s' "$parsed" | cut -d'|' -f3)"
-
-  if [ "$name_field" != "$skill_dir_name" ]; then
-    echo "FAIL: $skill_file -> name '$name_field' must match folder '$skill_dir_name'" >&2
+  if ! description="$(printf '%s\n' "$frontmatter" | yq -e '.description | select(tag == "!!str" and length > 0)' 2>/dev/null)"; then
+    echo "FAIL: $skill_file -> field description is not a non-empty string" >&2
     status=1
     continue
   fi
 
-  echo "OK:   $skill_file -> name=$name_field description_tokens=$desc_tokens"
+  if [ "$name" != "$skill_dir_name" ]; then
+    echo "FAIL: $skill_file -> name '$name' must match folder '$skill_dir_name'" >&2
+    status=1
+    continue
+  fi
+
+  token_count="$(printf '%s\n' "$description" | wc -w | tr -d '[:space:]')"
+
+  if [ "$token_count" -gt 100 ]; then
+    echo "FAIL: $skill_file -> description exceeds 100 tokens ($token_count)" >&2
+    status=1
+    continue
+  fi
+
+  echo "OK:   $skill_file -> name=$name description_tokens=$token_count"
 done
 
 exit "$status"

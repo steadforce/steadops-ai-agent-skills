@@ -110,5 +110,7 @@ Run the same checks locally:
    -w /apps \
    ghcr.io/igorshubovych/markdownlint-cli:latest \
    "**/*.md" \
+   --dot \
+   --ignore node_modules \
    --config .markdownlint.json
 ```
