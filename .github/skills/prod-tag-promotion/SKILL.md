@@ -76,8 +76,9 @@ Create one script per promotion (copy the latest) with:
 - all Applications Synced and Healthy with no running sync (name known exceptions explicitly in the script);
 - the time window and token validity checks;
 - a dry run by default that prints the plan and the exact `--confirm "promote <name> <7 chars>"` string;
-- tag handling in a temporary bare repository (backup tag, then forced `prod`), a wait loop that survives restarts of
-  the controller, and result checks (pods, images, URLs, all Applications).
+- tag handling in a temporary bare repository (backup tag, then `prod` pushed with `--force-with-lease` against the
+  tag object read before), a wait loop that survives restarts of the controller, and result checks (pods, images,
+  URLs, all Applications).
 
 Put the review result in the script header: what changes, what happens at once, what is not done, the rollback.
 

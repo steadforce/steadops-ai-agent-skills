@@ -120,17 +120,19 @@ local time and points to the current `prod` commit:
 git fetch origin main
 git fetch --force origin 'refs/tags/prod*:refs/tags/prod*'
 old=$(git rev-parse 'prod^{commit}')
+expected_prod=$(git rev-parse refs/tags/prod)   # tag object as fetched; the push below fails if it changed since
 backup="prod-$(TZ=Europe/Berlin git for-each-ref --format='%(taggerdate:format-local:%Y%m%d-%H%M%S)' refs/tags/prod)"
 echo "$backup -> $old"
 git tag -a -m "Staged to prod" "$backup" "$old" \
   && git push origin "refs/tags/$backup" \
   && [ "$(git ls-remote origin "refs/tags/$backup^{}" | cut -f1)" = "$old" ] \
   && git tag -a -f -m "Staged to prod" prod <target commit> \
-  && git push -f origin refs/tags/prod
+  && git push --force-with-lease="refs/tags/prod:$expected_prod" origin refs/tags/prod
 ```
 
-The chain moves `prod` only after the backup tag exists on the remote and points to `$old`. Do not split it into separate
-commands. Stop when `$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
+The chain moves `prod` only after the backup tag exists on the remote and points to `$old`, and `--force-with-lease` makes
+the push fail when someone else moved `prod` after your fetch. Do not split it into separate commands and do not use a
+plain `-f`. Stop when `$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
 
 ### 5. Verify after each step
 
@@ -157,9 +159,14 @@ restarts the gateway pods, so the gateway steps afterwards only change chart lab
 Move `prod` back to the commit of the backup tag and push it; Argo CD restores the previous version:
 
 ```sh
-git tag -a -f -m "Staged to prod" prod "<backup tag>^{commit}"
-git push -f origin refs/tags/prod
+git fetch --force origin 'refs/tags/prod*:refs/tags/prod*'
+expected_prod=$(git rev-parse refs/tags/prod)
+git tag -a -f -m "Staged to prod" prod "<backup tag>^{commit}" \
+  && git push --force-with-lease="refs/tags/prod:$expected_prod" origin refs/tags/prod
 ```
+
+If the push is rejected, someone moved `prod` after your fetch. Read the new state before rolling back, so you do
+not undo a newer promotion.
 
 Roll back in reverse order (`istio-egress` → `istio-ingress` → `istio-deployment` → `istio-cni`). After rolling back
 istiod, restart the workloads again so the proxies match the control plane.

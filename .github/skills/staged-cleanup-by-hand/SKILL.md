@@ -43,12 +43,15 @@ metadata:
    candidates again live; guard on the health of all other Applications; run `kubectl delete --dry-run=server` first;
    require `--confirm "delete <group> <count>"`.
 4. Order the groups so that controllers go first: Applications, then workloads, then the database custom resources,
-   then routing, then namespaces, then cluster-wide objects (roles, CRDs) last, refused while instances exist.
-   Before deleting an owner, read its finalizers (for example `resources-finalizer.argocd.argoproj.io` on an Application)
-   and the behavior of its operator: a finalizer or an operator can delete all managed resources at once, which a
-   server-side dry run does not show. Delete the owner only when it has no cascading finalizer, or after the owner
-   approved a procedure that does not cascade (for example removing the finalizer first), and stop if the later groups
-   could not be kept apart.
+   then routing, then namespaces, then cluster-wide objects (roles, CRDs) last, refused while instances exist. Before
+   deleting an owner, read its finalizers (every `resources-finalizer.argocd.argoproj.io` variant on an Application),
+   the behavior of its operator, and the `ownerReferences` of its dependents. A finalizer, an operator, or Kubernetes
+   garbage collection can delete the dependents at once, and a server-side dry run does not show it. For example a
+   StatefulSet with `persistentVolumeClaimRetentionPolicy.whenDeleted: Delete` deletes its PVCs. Check that policy
+   (and `whenScaled`) and every dependent's `ownerReferences` with `kubectl get -o yaml`; use an orphaning delete
+   (`--cascade=orphan`) where the dependents must stay. Delete the owner only when it has no cascading finalizer, or
+   after the owner approved a procedure that does not cascade (for example removing the finalizer first), and stop if
+   the later groups could not be kept apart.
 5. After each group: list what is left, check all Applications, check the public URLs.
 
 ## Report
