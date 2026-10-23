@@ -39,6 +39,13 @@ Use this skill for requests like:
 - Treat snapshot assertions as supporting evidence only; snapshot-only tests do not count as override coverage.
 - Finish with a clean passing Helm unittest run.
 
+## Branch base and CI on main
+
+- Fetch the real remote `main` and branch from it (`git fetch origin main`, then `git switch -c <branch> FETCH_HEAD`), not from a stale local `main`; the test files and workflows of newer commits may be missing locally.
+- Search `tests/` as well as the templates before changing a value that tests may assert (image hosts, domains, names).
+- Run `helm unittest` locally before every push. After the merge, check the CI run on `main`: a rename that touches asserted values breaks `main` even when the pull request was green.
+- Argo CD renders with Helm 4, which drops values that are `null`; a Helm 3 unittest image may disagree. Compare the unittest plugin and Helm version with the one CI uses.
+
 ## Large workspace search strategy
 
 When the workspace contains many repositories, avoid broad workspace-wide
