@@ -130,10 +130,10 @@ git tag -a -m "Staged to prod" "$backup" "$old" \
   && git push --force-with-lease="refs/tags/prod:$expected_prod" origin refs/tags/prod
 ```
 
-The chain moves `prod` only after the backup tag exists on the remote and points to `$old`, and `--force-with-lease` makes
-the push fail when someone else moved `prod` after your fetch. Do not split it into separate commands and do not use a
-plain `-f`. Write down the full target commit of every
-repository; the rollback compares against it. Stop when `$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
+The chain moves `prod` only after the backup tag exists on the remote and points to `$old`, and `--force-with-lease`
+makes the push fail when someone else moved `prod` after your fetch. Do not split it into separate commands and do not
+use a plain `-f`. Write down the full target commit of every repository; the rollback compares against it. Stop when
+`$backup` already exists or `$old` is not the commit Argo CD reports as deployed.
 
 ### 5. Verify after each step
 
