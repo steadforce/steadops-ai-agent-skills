@@ -45,6 +45,7 @@ Use this skill when the request involves:
 ## How this skill works
 
 Unlike traditional static analysis tools that match patterns, this skill:
+
 1. **Reads code like a security researcher** — understanding context, intent, and data flow
 2. **Traces across files** — following how user input moves through your application
 3. **Self-verifies findings** — re-examines each result to filter false positives
@@ -67,7 +68,9 @@ calls that can fail due to task queue limits.
 - Use workspace search tools only for narrow, repository-scoped lookups.
 
 ### Step 1 — Scope resolution
+
 Determine what to scan:
+
 - If a path was provided (`/security-review src/auth/`), scan only that scope
 - If no path given, scan the **entire project** starting from the root
 - Identify the language(s) and framework(s) in use (check package.json, requirements.txt,
@@ -75,7 +78,9 @@ Determine what to scan:
 - Read `references/language-patterns.md` to load language-specific vulnerability patterns
 
 ### Step 2 — Dependency audit
+
 Before scanning source code, audit dependencies first (fast wins):
+
 - **Node.js**: Check `package.json` + `package-lock.json` for known vulnerable packages
 - **Python**: Check `requirements.txt` / `pyproject.toml` / `Pipfile`
 - **Java**: Check `pom.xml` / `build.gradle`
@@ -86,7 +91,9 @@ Before scanning source code, audit dependencies first (fast wins):
 - Read `references/vulnerable-packages.md` for a curated watchlist
 
 ### Step 3 — Secrets and exposure scan
+
 Scan ALL files (including config, env, CI/CD, Dockerfiles, IaC) for:
+
 - Hardcoded API keys, tokens, passwords, private keys
 - `.env` files accidentally committed
 - Secrets in comments or debug logs
@@ -95,16 +102,19 @@ Scan ALL files (including config, env, CI/CD, Dockerfiles, IaC) for:
 - Read `references/secret-patterns.md` for regex patterns and entropy heuristics to apply
 
 ### Step 4 — Vulnerability deep scan
+
 This is the core scan. Reason about the code — don't just pattern-match.
 Read `references/vuln-categories.md` for full details on each category.
 
-**Injection Flaws**
+#### Injection Flaws
+
 - SQL Injection: raw queries with string interpolation, ORM misuse, second-order SQLi
 - XSS: unescaped output, dangerouslySetInnerHTML, innerHTML, template injection
 - Command Injection: exec/spawn/system with user input
 - LDAP, XPath, Header, Log injection
 
-**Authentication & Access Control**
+#### Authentication & Access Control
+
 - Missing authentication on sensitive endpoints
 - Broken object-level authorization (BOLA/IDOR)
 - JWT weaknesses (alg:none, weak secrets, no expiry validation)
@@ -112,7 +122,8 @@ Read `references/vuln-categories.md` for full details on each category.
 - Privilege escalation paths
 - Mass assignment / parameter pollution
 
-**Data Handling**
+#### Data Handling
+
 - Sensitive data in logs, error messages, or API responses
 - Missing encryption at rest or in transit
 - Insecure deserialization
@@ -120,27 +131,33 @@ Read `references/vuln-categories.md` for full details on each category.
 - XXE (XML External Entity) processing
 - SSRF (Server-Side Request Forgery)
 
-**Cryptography**
+#### Cryptography
+
 - Use of MD5, SHA1, DES for security purposes
 - Hardcoded IVs or salts
 - Weak random number generation (Math.random() for tokens)
 - Missing TLS certificate validation
 
-**Business Logic**
+#### Business Logic
+
 - Race conditions (TOCTOU)
 - Integer overflow in financial calculations
 - Missing rate limiting on sensitive endpoints
 - Predictable resource identifiers
 
 ### Step 5 — Cross-file data flow analysis
+
 After the per-file scan, perform a **holistic review**:
+
 - Trace user-controlled input from entry points (HTTP params, headers, body, file uploads)
   all the way to sinks (DB queries, exec calls, HTML output, file writes)
 - Identify vulnerabilities that only appear when looking at multiple files together
 - Check for insecure trust boundaries between services or modules
 
 ### Step 6 — Self-verification pass
+
 For EACH finding:
+
 1. Re-read the relevant code with fresh eyes
 2. Ask: "Is this actually exploitable, or is there sanitization I missed?"
 3. Check if a framework or middleware already handles this upstream
@@ -148,10 +165,13 @@ For EACH finding:
 5. Assign final severity: CRITICAL / HIGH / MEDIUM / LOW / INFO
 
 ### Step 7 — Generate security report
+
 Output the full report in the format defined in `references/report-format.md`.
 
 ### Step 8 — Propose patches
+
 For every CRITICAL and HIGH finding, generate a concrete patch:
+
 - Show the vulnerable code (before)
 - Show the fixed code (after)
 - Explain what changed and why

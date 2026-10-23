@@ -35,6 +35,7 @@ Enforce a consistent commit format.
 ## When to use
 
 Use this skill when the request asks to:
+
 - Draft a commit message.
 - Review or rewrite a commit message.
 - Run `git commit` and prepare the message first.
@@ -52,6 +53,7 @@ Use this skill when the request asks to:
 ## References
 
 Consider the following references when creating new commit messages:
+
 - **Subject line rules, body format, URLs, issue references**:
   [./references/COMMIT_FORMAT.md](./references/COMMIT_FORMAT.md)
 - **Split strategies, anti-rationalizations, and refactoring patterns**:

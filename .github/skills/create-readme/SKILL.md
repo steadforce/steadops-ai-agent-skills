@@ -1,6 +1,9 @@
 ---
 name: create-readme
-description: 'Create a README.md file for the project'
+description: >-
+  Use when creating, rewriting, or validating a repository README.md,
+  especially for Helm umbrella chart repositories; enforces runnable,
+  verified examples.
 ---
 
 # Create README
@@ -15,104 +18,292 @@ Write README files that are appealing, informative, and easy to read.
 
 Work only within the target repository.
 Do not perform workspace-wide analysis unless explicitly requested.
+In large multi-repository workspaces, use terminal discovery commands (for
+example `grep -R`, `find`, `ls`) scoped to the target repository path.
+
+Exceptions: read-only fetches outside the repository are allowed for the
+inspiration READMEs listed under Content and for reusable workflows that the
+repository pins (see Verify Claims).
 
 ## When to use
 
 Use this skill when the request asks to:
+
 - Create or rewrite a repository `README.md`.
 - Improve README structure, clarity, or onboarding flow.
 - Validate README formatting and markdown quality.
 
+## Constraints
+
+- Do not change files other than `README.md` unless explicitly requested.
+  Validation runs in a temporary copy of the working tree (see the validation
+  workflow), so it never changes the repository itself.
+- Do not commit; draft the commit message only, unless the user asks to commit.
+- Do not invent badges, logos, URLs, or behavior that the repository does not
+  contain or confirm.
+- Do not include sections like "LICENSE", "CONTRIBUTING", or "CHANGELOG";
+  there are dedicated files for those.
+- Do not use `--pull=always` in Docker commands unless explicitly requested.
+- Do not use the term `wrapper chart`; use `umbrella chart` for charts that
+  package and configure dependencies.
+
 ## Task
 
-1. Review the target repository only, then create a comprehensive and well-structured README.md file for that project.
-2. Take inspiration from these README files for structure, tone, and content:
-   - https://raw.githubusercontent.com/Azure-Samples/serverless-chat-langchainjs/refs/heads/main/README.md
-   - https://raw.githubusercontent.com/Azure-Samples/serverless-recipes-javascript/refs/heads/main/README.md
-   - https://raw.githubusercontent.com/sinedied/run-on-output/refs/heads/main/README.md
-   - https://raw.githubusercontent.com/sinedied/smoke/refs/heads/main/README.md
-3. Do not overuse emojis, and keep the README concise and to the point.
-4. Do not include sections like "LICENSE", "CONTRIBUTING", "CHANGELOG", etc.
-   There are dedicated files for those sections.
-5. Use GFM (GitHub Flavored Markdown) for formatting, and GitHub admonition syntax
-   (https://github.com/orgs/community/discussions/16925) where appropriate.
-6. If you find a logo or icon for the project, use it in the README header.
-7. Ensure that lines in README.md are not longer than 120 chars if possible.
-8. In shell snippets, indent each command line with a single leading space for
-   consistent formatting.
-9. In shell snippets, place each command option on its own line (for example,
-   `helm template \\` then one flag per line).
-10. In shell snippets, sort command options alphabetically where that does not
-    change command behavior.
-11. Lint `README.md` with markdownlint settings by inlining the JSON content shown in this
-   skill (it mirrors `references/markdownlint.json`) via a heredoc into a temporary file
-   inside the container, then pass that file to `markdownlint` with `-c`. Use image
-   `ghcr.io/igorshubovych/markdownlint-cli:latest`. Do not reference the config file
-   directly from the host path. Use this same pattern in every README-validation example.
-12. Check README.md that it contains valid markdown.
-13. Prefer local tooling examples only when the required binary is known to be installed.
-14. If a required tool is missing, provide containerized commands using `docker run`.
-15. When using `docker run`, include `-u $(id -u)`.
-16. Do not use `--pull=always` in Docker commands unless explicitly requested.
-17. For Helm commands in README examples, use `alpine/helm` as container image.
-18. For Helm `template` examples in README files, include `--include-crds` by default.
-19. For helm-unittest examples, use `helmunittest/helm-unittest` as container image.
-20. For helm-unittest Docker commands, set a writable cache path with
-   `-e HELM_CACHE_HOME=/tmp/helm/.config`.
-21. For `yq`, `kubectl`, or `hetzner-k3s` examples, use
-   `ghcr.io/steadforce/steadops/workbenches/k8s:main` as container image.
-22. When commands are documented to run inside the
-   `SteadOps-Steadies-K8s-Workplace` workbench, document the available tools
-   for that flow (for example `helm`, `yq`, `kubectl`, and `act`) and show
-   commands using those tools directly from the workbench shell.
-23. Ensure generated files end with exactly one trailing newline.
-24. For charts that package and configure dependencies, use the term
-   `umbrella chart` and avoid `wrapper chart`.
-25. As the final step, draft a commit message that matches repository commit
-   conventions and summarizes the README change.
-26. Use the `commit-messages` skill when drafting that message.
-27. Detect project convention before drafting:
-   - check repository-specific guidance (for example `.github/copilot-instructions.md`)
-   - inspect recent history with `git log --oneline -20`
-28. Commit message style requirements:
-   - subject is imperative, capitalized, and <= 72 characters
-   - subject does not end with a period
-   - add a blank line, then a body that explains why
-   - wrap body lines at about 72 characters when practical
-   - keep the commit atomic; if subject naturally needs "and", split changes
-29. In large multi-repository workspaces, use terminal discovery commands only
-    within the target repository (for example `grep -R`, `find`, `ls`).
-    Do not use workspace-wide search tools unless explicitly requested.
-30. Use a human-readable main title (`# ...`) in Title Case for `README.md`
-    (for example `# External Secrets Deployment`) instead of a raw repository
-    slug such as `# external-secrets-deployment`.
+Review the target repository, then create or update a well-structured
+`README.md`. Work in this sequence: review the repository and verify claims,
+write the README, run the validation workflow, then report and draft the commit
+message. Apply the Helm Charts group only when the repository contains a
+`Chart.yaml`.
+
+### Content
+
+- Keep the README complete but concise; do not overuse emojis.
+- When updating an existing README, keep content that is still accurate (for
+  example maintainer-written sections, troubleshooting notes, and links), even
+  if the outline below has no place for it. Report every removed section and
+  the reason.
+- Take inspiration from these README files for structure and tone:
+  - <https://raw.githubusercontent.com/Azure-Samples/serverless-chat-langchainjs/refs/heads/main/README.md>
+  - <https://raw.githubusercontent.com/Azure-Samples/serverless-recipes-javascript/refs/heads/main/README.md>
+  - <https://raw.githubusercontent.com/sinedied/run-on-output/refs/heads/main/README.md>
+  - <https://raw.githubusercontent.com/sinedied/smoke/refs/heads/main/README.md>
+- Use GFM (GitHub Flavored Markdown), and GitHub admonition syntax
+  (<https://github.com/orgs/community/discussions/16925>) where appropriate.
+- If the repository contains a logo or icon, use it in the README header.
+- Use a human-readable main title in Title Case (for example
+  `# External Secrets Deployment`) instead of a raw repository slug such as
+  `# external-secrets-deployment`.
+- Use Title Case for section headings (`##`, `###`) unless the target
+  repository already enforces a different heading style.
+- Keep lines at or below 120 characters where possible, including table rows.
+  The markdownlint config disables MD013 for tables, so shorten table cells
+  instead of relying on that exemption. Check with
+  `awk 'length>120{print FNR": "length}' README.md`.
+- End the file with exactly one trailing newline.
+
+### Verify Claims
+
+Verify every behavioral claim against the file that controls it, not against
+the existing README. Do not carry over statements you have not verified:
+
+- **Renovate:** read `renovate.json` completely. Later `packageRules` override
+  earlier ones, so a catch-all minor/patch automerge rule can be overridden
+  for specific managers (for example `helmv3` major and minor updates).
+- **CI workflows:** when a workflow only calls a reusable workflow
+  (`uses: org/repo/.github/workflows/x.yaml@ref`), read that reusable workflow
+  at the pinned ref, for example with
+  `curl -sf https://raw.githubusercontent.com/<org>/<repo>/<ref>/.github/workflows/<file>`
+  when the `gh` CLI is unavailable. Document what it actually does (for
+  example opening one pull request per environment branch instead of
+  committing to `main`, or sending notifications on Renovate branches).
+- **Values defaults:** describe the top-level keys that `values.yaml` sets and
+  the values the chart itself defines; do not restate every nested subchart
+  setting. Do not claim that it sets only some keys unless you checked all of
+  them.
+- **Commands:** when the pipeline (or a reusable workflow it calls) runs an
+  equivalent command, compare the documented command's flags and arguments
+  with it. A snippet that runs successfully can still use a flag wrongly (for
+  example passing a value to the boolean `helm template --release-name`, which
+  only works because Helm takes the value as the positional release name).
+- **Tool defaults:** check claims about a tool's output, formats, or defaults
+  against its `--help` output in the image the README uses (for example
+  helm-unittest writes XUnit unless `-t JUnit` is passed with `-o`).
+
+### Snippet Formatting
+
+- Indent each command line with a single leading space.
+- Place each command option on its own line (for example `helm template \`,
+  then one flag per line).
+- Sort options alphabetically where that does not change command behavior.
+  Sort by option name, ignoring leading dashes, and keep the image name and its
+  arguments last (for example `-e`, `--entrypoint`, `--rm`, `-u`, `-v`, `-w`).
+  Keep repeated options, such as several `-e` flags, together in their original
+  relative order.
+- Mount the repository with `-v "$(pwd):/apps"` and `-w /apps`, and document
+  that commands run from the repository root.
+- These formatting rules apply to top-level commands. Heredoc bodies and
+  commands inside `sh -c` scripts or loops are exempt where splitting them would
+  change behavior or hurt readability.
+
+### Tooling And Containers
+
+- Always document a containerized flow with `docker run`, and include
+  `-u $(id -u)`.
+- Additionally document the `SteadOps-Steadies-K8s-Workplace` workbench flow
+  when the repository's docs already reference that workbench or the user asks
+  for it. In that flow, list the available tools (for example `helm`, `yq`,
+  `kubectl`, `hetzner-k3s`, and `act`) and run them directly from the workbench shell,
+  without a `docker run` wrapper.
+- Document other local binaries only when the repository states them as a
+  prerequisite.
+- For `yq`, `kubectl`, or `hetzner-k3s` outside the workbench flow, use
+  `ghcr.io/steadforce/steadops/workbenches/k8s:main`, even if local binaries
+  are available. Exception: when `yq` only feeds a Helm command in the same
+  container (for example deriving repositories for `helm dependency build`),
+  use `alpine/helm`, which ships `yq`.
+- In the workbench flow, `KUBECONFIG` is always set to a valid config, so
+  `kubectl` needs no extra setup. For containerized `kubectl` examples, pass
+  that config into the container, because `-u $(id -u)` leaves no home
+  directory with a kubeconfig:
+  `-e KUBECONFIG=/tmp/kubeconfig` and
+  `-v "${KUBECONFIG:-$HOME/.kube/config}:/tmp/kubeconfig:ro"`.
+  Outside the workbench, `KUBECONFIG` is often unset because `kubectl`
+  defaults to `~/.kube/config`; a bare `"$KUBECONFIG"` then fails with
+  `docker: invalid spec: :/tmp/kubeconfig:ro: empty section between colons`.
+  State in the README that `KUBECONFIG` must point to a single file, because a
+  colon-separated list also breaks the mount.
+- Document markdown linting only when the target repository has its own
+  markdownlint config, and then use the same command as its CI. Do not copy the
+  skill's inline heredoc config into a README.
+
+### Helm Charts
+
+- For Helm commands, use the `alpine/helm` image, and set `-e HOME=/tmp` on
+  every invocation, including one-liners such as
+  `alpine/helm dependency update .`. As a non-root uid, Helm otherwise fails
+  with `Error: mkdir /.cache: permission denied`, or, for `dependency update`
+  and `build`, with
+  `open /.cache/helm/repository/helm-manager-…-index.yaml…: no such file or directory`.
+- For Helm `template` examples, include `--include-crds` by default.
+- For helm-unittest, use the `helmunittest/helm-unittest` image and set
+  `-e HELM_CACHE_HOME=/tmp/helm/.config`. The image sets `HELM_DATA_HOME`
+  itself, so only the cache must be writable; without it the unittest plugin
+  fails to load as a non-root uid.
+- When the workbench flow applies, document `helm unittest .` for it next to
+  the containerized command. The workbench image does not ship the
+  helm-unittest plugin; it only works because the workbench mounts `$HOME`,
+  so a plugin installed in the host's Helm home is available. State that, and
+  document the one-time install
+  `helm plugin install --verify=false https://github.com/helm-unittest/helm-unittest.git`
+  (Helm 4 needs `--verify=false` for this unsigned plugin, as the pipeline
+  does). Do not claim that the workbench ships the plugin, and report the
+  install command as "not executed", because it changes the user's Helm home.
+
+Use a README outline like this for umbrella chart repositories, and drop
+sections that do not apply:
+
+```text
+ Title and one-line purpose
+ Overview (upstream chart, what the umbrella chart configures)
+ Prerequisites
+ Repository Layout (table including Chart.yaml, Chart.lock, values files, tests)
+ Setup (dependency build)
+ Rendering (helm template per environment)
+ Testing (helm-unittest)
+ CI/CD (hydration, unittest, notifications)
+ Dependency Updates (Renovate, dependency update)
+```
+
+For charts with a committed `Chart.lock` (for example charts hydrated by the
+`helm-hydration.yaml` reusable workflow in `steadforce/steadops-workflows` v4+,
+which runs `helm dependency build` when `Chart.lock` exists and falls back to
+`helm dependency update` with a warning otherwise; verify this at the pinned
+ref):
+
+- Do not describe `Chart.lock` as generated or gitignored; only `charts/` is
+  gitignored.
+- Document `helm dependency build` for setting up after cloning and after any
+  pull that changes `Chart.lock`.
+- Document `helm dependency update` separately, only for regenerating
+  `Chart.lock` after a dependency change in `Chart.yaml`, and state that the
+  new lock must be committed together with `Chart.yaml`.
+- List `Chart.lock` in the repository layout table.
+
+Before `helm dependency build`, register the HTTP(S) dependency repositories.
+`build` resolves them by registered name and fails on a fresh Helm home with
+`Error: no repository definition for https://…/. Please add the missing repos
+via 'helm repo add'`. Do not hardcode `helm repo add` per dependency; derive
+the repositories from `Chart.yaml` the way the pipeline does:
+
+- Use `explode(.)`, because `Chart.yaml` often sets dependency names through
+  YAML anchors.
+- Include only `http*` repositories, because `oci://` and `file://`
+  dependencies need no repo entry.
+- Pass `--force-update`, which makes the command idempotent, repoints a
+  same-named repo to the URL in `Chart.yaml`, and matches the pipeline.
+- Dependencies with `repository: "@<alias>"` are skipped by this filter but
+  still need that repo registered; document the matching `helm repo add` for
+  them.
+
+Workbench flow (include it when the workbench flow applies), where `helm` and
+`yq` run directly:
+
+```sh
+ yq 'explode(.) | .dependencies[] | select(.repository == "http*") | .name + " " + .repository' Chart.yaml |
+   while read -r name repo; do helm repo add --force-update "$name" "$repo"; done
+ helm dependency build .
+```
+
+Containerized flow: `alpine/helm` ships `yq`, so run both steps in one
+container by overriding the entrypoint:
+
+```sh
+ docker run \
+   -e HOME=/tmp \
+   --entrypoint sh \
+   --rm \
+   -u $(id -u) \
+   -v "$(pwd):/apps" \
+   -w /apps \
+   alpine/helm -c '
+     yq "explode(.) | .dependencies[] | select(.repository == \"http*\") | .name + \" \" + .repository" Chart.yaml |
+       while read -r name repo; do helm repo add --force-update "$name" "$repo"; done &&
+     helm dependency build .
+   '
+```
+
+### Commit Message
+
+As the final step, draft a commit message for the README change with the
+`commit-messages` skill. Detect the project convention first from
+repository guidance (for example `.github/copilot-instructions.md`) and
+`git log --oneline -20`.
 
 ## Deliverable expectations
 
 When done, report:
+
 - whether `README.md` was created or updated
 - which repository inputs were reviewed (for example chart files, scripts, docs)
 - which sections were added, removed, or reorganized
-- notable command examples included (local vs containerized)
+- notable command examples included (workbench vs containerized)
 - which files were changed
-- which validation command(s) were run
-- final pass/fail counts
+- which validation command(s) were run, with final pass/fail counts
+- the result of each documented shell snippet, including those not executed
+- for Helm charts, confirmation that every `alpine/helm` invocation in the README
+  sets `-e HOME=/tmp`
+- the output of the line-length check, including table rows
 - remaining documentation gaps, if any
-- drafted commit message text
-- how commit style was detected (repository guidance and/or `git log`)
-- commit message subject/body conformance checks
+- drafted commit message text, how commit style was detected, and
+  subject/body conformance checks
 
 ## Validation workflow
 
-Always validate `README.md` with an inline heredoc config that mirrors the JSON block
-shown in this skill (equivalent to `references/markdownlint.json`) instead of
-referencing a host file path directly.
-Use the same pattern in every validation example in this skill.
-The canonical command is:
+Validate `README.md` with markdownlint, using image
+`ghcr.io/igorshubovych/markdownlint-cli:v0.49.1`. The version is pinned because
+`"default": true` enables new rules automatically; when bumping it, check the
+new rules and update `references/markdownlint.json` in the same change.
+
+If the target repository has its own markdownlint config, lint with that
+config so the result matches the repository's CI. For `.markdownlint.json` or
+`.markdownlint.yaml`, pass `-c <file>` to the same image. For
+`.markdownlint-cli2.*` configs, which belong to the separate
+`markdownlint-cli2` tool, use the tool and image that the repository's CI uses.
+
+Otherwise, inline the skill config through a heredoc instead of mounting
+`references/markdownlint.json`: that file lives in this skill repository, not
+in the target repository, so it is not available under `/apps`.
+`references/markdownlint.json` is the source of truth; keep the inline JSON
+identical to it. Run from the target repository root:
 
 ```sh
-docker run --rm -u $(id -u) --entrypoint sh \
-  -v /path/to/project:/apps -w /apps ghcr.io/igorshubovych/markdownlint-cli:latest -lc '
+ docker run \
+   --entrypoint sh \
+   --rm \
+   -u $(id -u) \
+   -v "$(pwd):/apps" \
+   -w /apps \
+   ghcr.io/igorshubovych/markdownlint-cli:v0.49.1 -c '
     cat > /tmp/markdownlint.json <<'"'"'JSON'"'"'
 {
   "default": true,
@@ -125,5 +316,86 @@ docker run --rm -u $(id -u) --entrypoint sh \
 }
 JSON
     markdownlint -c /tmp/markdownlint.json README.md
-  '
+   '
 ```
+
+When markdownlint finds no file to lint, for example because the mounted path
+is not visible to the Docker daemon, it prints its usage text and still exits
+with 0. Treat usage output as a failed run, not as a pass.
+
+A passing markdownlint run only proves the markdown is valid. Before writing the
+report, also execute the shell snippets documented in the README and record the
+result of each. Run each fenced snippet exactly as written, copied from
+`README.md` rather than retyped, so a typo or broken line continuation in the
+README cannot slip through. Only variants that the prose describes (for example
+"add `-t JUnit -o test-output.xml`") may be composed by hand; report those
+separately.
+
+Run the snippets from the root of a temporary copy of the working tree, not
+from the repository itself. `helm dependency build` deletes archives in the
+gitignored `charts/` directory that do not match `Chart.lock`, and
+`helm dependency update` rewrites `Chart.lock`, so running in place can destroy
+local work that `git status` does not show.
+
+Copy only tracked files and untracked files that are not ignored. That matches
+a fresh clone plus uncommitted changes, which a `git worktree` would not
+include. Leaving out ignored build output such as `charts/` also means that a
+README missing a setup step (for example `helm dependency build`) fails
+validation instead of passing on leftovers. `--ignore-failed-read` skips
+tracked files that were deleted locally.
+
+Create the copy below the repository's `.git` directory, not in `/tmp`: in the
+workbench, Docker runs against the host daemon, so only paths shared with the
+host (such as the workspace) can be mounted, and `.git` is always writable and
+never shows up in `git status`. Run the block in a subshell with `set -eu`, so a
+failed `mktemp` stops the run instead of falling back to the repository itself.
+For workbench-flow commands, also point Helm at an isolated home next to the
+copy, so the user's repo list is neither used nor modified. Keep the Helm home
+outside the copied chart directory: Helm treats every file there as part of the
+chart unless `.helmignore` excludes it, so a Helm home inside the copy would
+end up in `.Files`, `helm lint`, and packaged charts. Extract the README's
+fenced snippets into the validation directory too, then run them in README
+order with `bash "$validation_dir/blocks/<n>.sh"`. The trap removes everything:
+
+```sh
+ (
+   set -eu
+   validation_dir="$(mktemp -d "$(git rev-parse --absolute-git-dir)/readme-validation.XXXXXX")"
+   trap 'rm -rf "$validation_dir"' EXIT
+   repo_copy="$validation_dir/repo"
+   helm_home="$validation_dir/helm"
+   mkdir "$repo_copy" "$validation_dir/blocks"
+   git ls-files -z -co --exclude-standard |
+     tar --ignore-failed-read --null -T - -cf - | tar -xf - -C "$repo_copy"
+   awk -v d="$validation_dir/blocks" '
+     /^```(sh|shell|bash)$/ { n++; f = 1; next }
+     /^```/ { f = 0 }
+     f { print > (d "/" n ".sh") }
+   ' README.md
+   cd "$repo_copy"
+   export HELM_CACHE_HOME="$helm_home/cache"
+   export HELM_PLUGINS="$(helm env HELM_PLUGINS)"
+   export \
+     HELM_CONFIG_HOME="$helm_home/config" \
+     HELM_DATA_HOME="$helm_home/data"
+   # run the documented snippets here
+ )
+```
+
+Keep `HELM_PLUGINS` pinned as shown: it defaults to a path below
+`HELM_DATA_HOME`, so without it installed plugins such as helm-unittest
+disappear. Skip the Helm lines when `helm` is not installed locally, because
+containerized commands do not read these variables.
+
+- Execute only commands that change nothing outside the temporary copy and
+  fetch only from chart or image registries: for example
+  `helm dependency build` and `update`, `helm template`, helm-unittest, render
+  loops, and markdownlint.
+- Do not execute commands that reach a cluster or cloud provider (for example
+  `kubectl apply`, `kubectl delete`, `hetzner-k3s create`, or `helm install`)
+  unless the user explicitly approves it. Report them as "not executed".
+- Do not execute `act` by default. It runs the repository's workflow steps,
+  which can push, deploy, or call webhooks; report it as "not executed" unless
+  the user approves it.
+- The isolated Helm home has no registry login, so report dependencies from
+  private OCI registries as "not executed" instead of logging in.
