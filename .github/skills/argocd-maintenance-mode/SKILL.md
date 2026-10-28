@@ -1,7 +1,7 @@
 ---
 name: argocd-maintenance-mode
 description: Use when an application must be switched off for a maintenance window while Argo CD auto-sync is paused, for example a database major upgrade that needs the application disconnected.
-version: 1.0.2
+version: 1.0.3
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -46,6 +46,9 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
 - Do not switch off on a failed check of the maintenance work. The script holds and prints what to look at; the user
   decides.
 - Do not move a tag or change the target revision expecting a deployment while the mode is on: nothing syncs.
+- Do not restore auto-sync before Argo CD has compared the current revision. It compares with the revision it has
+  cached, and a moved tag is seen only after the next poll. With self-heal back on, a stale revision re-applies the old
+  desired state over a change made by hand (a database version).
 
 ## Workflow
 
@@ -60,8 +63,11 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
    (a database version), move the `prod` tag to the commit that records the new state before step 4, while the sync is
    still paused: nothing deploys, and Argo CD finds live equal to desired afterwards. Otherwise self-heal reverts the
    change as soon as auto-sync returns.
-4. **Off**: scale back to the recorded replicas, wait for readiness and the health endpoint, restore the recorded sync
-   policies (child, then parent), remove the annotation, and wait for Synced and Healthy.
+4. **Off**: scale back to the recorded replicas, wait for readiness and the health endpoint. Then force a hard refresh
+   (`argocd.argoproj.io/refresh=hard`) while auto-sync is still paused and wait until `status.reconciledAt` is newer
+   than the refresh. For a change that must stay, also wait until the resource that carries it shows Synced at the new
+   revision in `status.resources`. Only then restore the recorded sync policies (child, then parent), remove the
+   annotation, and wait for Synced and Healthy.
 5. If the script died, restore from the state file; a `--defaults` fallback assumes one replica and auto-sync with
    prune and self-heal and must be chosen on purpose.
 

@@ -3,7 +3,7 @@ name: postgres-operator-major-upgrade
 description: >-
   Use when raising the major PostgreSQL version of a Zalando postgres-operator cluster in place
   (for example 14 to 15): rehearsal, backups, maintenance window, and the Argo CD interplay.
-version: 1.0.1
+version: 1.0.2
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -96,7 +96,9 @@ Read the Copilot review after the push.
    than the upgrade. Do this before the application is switched on. If it fails, hold with the application off and
    let the user decide; only the user can accept a window of writes that cannot be recovered.
 6. Move the `prod` tag to the merge commit of the pull request while the sync is paused (see
-   `prod-tag-promotion` for the backup tag), then maintenance mode off.
+   `prod-tag-promotion` for the backup tag). Hard-refresh the Application and wait until it compares at that commit
+   with the `postgresql` resource Synced (`status.resources`). Argo CD otherwise compares with its cached old tag, and
+   self-heal would set the version back to the old major as soon as auto-sync returns. Then maintenance mode off.
 7. Check health on all hosts, the application version, git over SSH, the logs for errors, runners, ExternalSecrets,
    and all Applications. Confirm the `postgresql` resource still says the target version.
 
