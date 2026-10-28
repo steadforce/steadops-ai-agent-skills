@@ -1,7 +1,7 @@
 ---
 name: argocd-maintenance-mode
 description: Use when an application must be switched off for a maintenance window while Argo CD auto-sync is paused, for example a database major upgrade that needs the application disconnected.
-version: 1.1.0
+version: 1.1.1
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -39,6 +39,7 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
   running job containers (with rootless docker in each runner pod: `docker ps` filtered on the job container name
   prefix) or ask the CI system for running jobs, and keep the recent-start check as a second signal. Prove the
   detector with a job that sleeps: a job that only prints a line is gone in seconds and slips between two polls.
+  An inspection that fails (a pod listing, a log read, an exec) is an abort, never "no jobs".
 - Do not scale down while a sync is pending or running. Pausing auto-sync does not cancel an operation in flight, and
   a slow hook or rollout can outlast the waits below. Require that neither Application has an `operation` and that
   `status.operationState.phase` is not `Running`, wait for it, and abort without scaling on a timeout.
@@ -56,18 +57,21 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
    `syncPolicy`, the parent's `syncPolicy`. Store it as an annotation on the Application (so `off` works from any shell)
    and in a private file with a time stamp.
 2. **On**: pause the parent (if its auto-sync is on), wait, pause the child, wait until neither Application has a
-   pending or running sync (abort on a timeout), scale to zero, wait until the pods are gone, check that the health
-   endpoint no longer answers 200, then hold-check for 45 seconds.
+   pending or running sync (abort on a timeout), scale to zero, wait until the application pods and the runner pods are
+   gone (abort on a timeout), check that the health endpoint no longer answers 200, then hold-check for 45 seconds
+   that nothing came back, runners included.
    A HorizontalPodAutoscaler does not scale a target that is at zero replicas.
 3. **Do the maintenance work** and verify it while the application is off. If the live resource must stay as changed
    (a database version), move the `prod` tag to the commit that records the new state before step 4, while the sync is
    still paused: nothing deploys, and Argo CD finds live equal to desired afterwards. Otherwise self-heal reverts the
    change as soon as auto-sync returns.
 4. **Off**: scale back to the recorded replicas, wait for readiness and the health endpoint. Then force a hard refresh
-   (`argocd.argoproj.io/refresh=hard`) while auto-sync is still paused and wait until `status.reconciledAt` is newer
-   than the refresh. For a change that must stay, also wait until the resource that carries it shows Synced at the new
-   revision in `status.resources`. Only then restore the recorded sync policies (child, then parent), remove the
-   annotation, and wait for Synced and Healthy.
+   (`argocd.argoproj.io/refresh=hard`) while auto-sync is still paused and wait until `status.reconciledAt` is strictly
+   later than a reference second taken before the refresh (the field has a resolution of one second, so equality
+   proves nothing). For a change that must stay, also wait until the resource that carries it shows Synced at the new
+   revision in `status.resources`. Only then restore the recorded sync policies (child, then parent) and wait for
+   Synced and Healthy. Keep the recorded state on the Application until both policies are restored and the
+   application is Synced and Healthy; remove it last, and exit non-zero with the marker kept otherwise.
 5. If the script died, restore from the state file; a `--defaults` fallback assumes one replica and auto-sync with
    prune and self-heal and must be chosen on purpose.
 

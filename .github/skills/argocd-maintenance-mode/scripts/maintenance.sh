@@ -52,11 +52,13 @@ state_dir="${MAINT_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/argocd-maint
 stop() { echo "STOP: $*" >&2; exit 1; }
 hz() { curl -s -o /dev/null -m 8 -w '%{http_code}' "$health_url" || true; }
 selector() { kubectl get deploy -n "$ns" "$dep" -o json | python3 -I -c 'import sys,json; print(",".join("%s=%s" % kv for kv in json.load(sys.stdin)["spec"]["selector"]["matchLabels"].items()))'; }
-app_pods() { kubectl get pods -n "$ns" -l "$(selector)" --no-headers 2>/dev/null | wc -l; }
-runner_pods() { [ -n "$runners" ] && kubectl get pods -n "$ns" --no-headers | awk -v r="$runners" '$1 ~ "^" r "-[0-9]+$" {print $1}' || true; }
-# jobs that are running RIGHT NOW: the job containers in the docker of each runner pod. The log check in `on` only sees
-# jobs that STARTED in the last 10 minutes; a long job that started earlier would be missed.
-active_jobs() { local n=0 c p; for p in $(runner_pods); do c="$(kubectl exec -n "$ns" "$p" -c "$runner_ctr" -- docker ps -q --filter "name=$job_filter" 2>/dev/null | wc -l)"; n=$((n + c)); done; echo "$n"; }
+# every inspection below FAILS (returns non-zero) when kubectl fails: an inspection that could not run is never read as "nothing there"
+app_pods() { local out; out="$(kubectl get pods -n "$ns" -l "$(selector)" --no-headers)" || return 1; printf '%s' "$out" | grep -c . || true; }
+runner_pods_all() { local out; out="$(kubectl get pods -n "$ns" --no-headers)" || return 1; printf '%s\n' "$out" | awk -v r="$runners" '$1 ~ "^" r "-[0-9]+$" {print $1}'; }
+runner_pods_running() { local out; out="$(kubectl get pods -n "$ns" --no-headers)" || return 1; printf '%s\n' "$out" | awk -v r="$runners" '$1 ~ "^" r "-[0-9]+$" && $3 == "Running" {print $1}'; }
+# jobs that are running RIGHT NOW: the job containers in the docker of each running runner pod (a pod that is not running cannot run a job).
+# The log check in `on` only sees jobs that STARTED in the last 10 minutes; a long job that started earlier would be missed.
+active_jobs() { local n=0 c p pods; pods="$(runner_pods_running)" || return 1; for p in $pods; do c="$(kubectl exec -n "$ns" "$p" -c "$runner_ctr" -- docker ps -q --filter "name=$job_filter")" || return 1; n=$((n + $(printf '%s' "$c" | grep -c . || true))); done; echo "$n"; }
 jp() { kubectl get application -n "$argo_ns" "$1" -o jsonpath="$2"; }
 marker() { kubectl get application -n "$argo_ns" "$app" -o json | python3 -I -c 'import sys,json; print(json.load(sys.stdin)["metadata"].get("annotations",{}).get(sys.argv[1],""))' "$key"; }
 pj() { python3 -I -c "import sys,json; d=json.loads(sys.argv[1]); print($2)" "$1"; }
@@ -68,15 +70,17 @@ status)
   echo "  app: $(jp "$app" '{.status.sync.status}/{.status.health.status}') | autoSync: $(jp "$app" '{.spec.syncPolicy.automated}')"
   echo "  deployment replicas: $(kubectl get deploy -n "$ns" "$dep" -o jsonpath='spec={.spec.replicas} ready={.status.readyReplicas}')"
   [ -z "$runners" ] || echo "  runners: $(kubectl get sts -n "$ns" "$runners" -o jsonpath='spec={.spec.replicas} ready={.status.readyReplicas}')"
-  echo "  health: $(hz)"; [ -z "$runners" ] || echo "  job containers running on the runners now: $(active_jobs)";;
+  echo "  health: $(hz)"; if [ -n "$runners" ]; then act="$(active_jobs)" && echo "  job containers running on the runners now: $act" || echo "  job containers running on the runners now: UNKNOWN (the inspection failed)"; fi;;
 on)
   [ -z "$(marker)" ] || stop "already in maintenance mode (see status)"
   [ "$(jp "$app" '{.status.sync.status}/{.status.health.status}')" = Synced/Healthy ] || stop "application $app is not Synced/Healthy"
   [ "$(jp "$app" '{.status.operationState.phase}')" != Running ] || stop "an Argo CD sync is running"
   if [ -n "$runners" ]; then
-    busy=0; for p in $(runner_pods); do b="$(kubectl logs -n "$ns" "$p" -c "$runner_ctr" --since=10m 2>/dev/null | grep -ciE "$start_pat" || true)"; busy=$((busy + b)); done
+    pods="$(runner_pods_running)" || stop "could not list the runner pods: runner activity is unknown, nothing was changed"
+    busy=0; for p in $pods; do l="$(kubectl logs -n "$ns" "$p" -c "$runner_ctr" --since=10m)" || stop "could not read the log of $p: runner activity is unknown, nothing was changed"; b="$(printf '%s\n' "$l" | grep -ciE "$start_pat" || true)"; busy=$((busy + b)); done
     if [ "$busy" != 0 ]; then [ $force = 1 ] && echo "  note: $busy job start line(s) in the last 10 minutes, going on because of --force" || stop "the runners started $busy job(s) in the last 10 minutes: wait until they are done or use --force"; else echo "  ok: no job started in the last 10 minutes"; fi
-    act="$(active_jobs)"; if [ "$act" != 0 ]; then [ $force = 1 ] && echo "  note: $act job container(s) are running now, going on because of --force" || stop "$act job container(s) are running on the runners right now (a long job that started earlier is not seen by the 10-minute check, and it fails when the application goes away): wait until they finish or use --force"; else echo "  ok: no job container is running on the runners"; fi
+    act="$(active_jobs)" || stop "could not inspect the running jobs on the runners (listing or exec failed): runner activity is unknown, nothing was changed"
+    if [ "$act" != 0 ]; then [ $force = 1 ] && echo "  note: $act job container(s) are running now, going on because of --force" || stop "$act job container(s) are running on the runners right now (a long job that started earlier is not seen by the 10-minute check, and it fails when the application goes away): wait until they finish or use --force"; else echo "  ok: no job container is running on the runners"; fi
   fi
   rsp="$(jp "$root_app" '{.spec.syncPolicy}')"; rheal="$(jp "$root_app" '{.spec.syncPolicy.automated.selfHeal}')"; rauto="$(jp "$root_app" '{.spec.syncPolicy.automated}')"
   if [ -n "$rauto" ] && [ $pause_root = 0 ]; then stop "$root_app has auto-sync on (selfHeal: ${rheal:-off}): with selfHeal it re-applies the sync policy of $app within seconds, without it any new root revision syncs and restores the pause. Run again with --pause-root (the root's auto-sync is paused and restored by off)"; fi
@@ -106,12 +110,13 @@ print(json.dumps(d,separators=(",",":")))' "$(date +%FT%T%z)" "$g" "$r" "$with_r
   done
   echo "  ok: no pending or running sync on $watch_apps"
   kubectl scale deploy -n "$ns" "$dep" --replicas=0 >/dev/null; [ $with_runners = 0 ] || kubectl scale sts -n "$ns" "$runners" --replicas=0 >/dev/null
-  n=1; for _ in $(seq 1 30); do n="$(app_pods)"; [ "$n" = 0 ] && break; sleep 5; done
-  echo "  application pods left: $n$([ $with_runners = 1 ] && echo ", runner pods left: $(runner_pods | wc -l)")"
+  n=1; r_left=0; for _ in $(seq 1 60); do n="$(app_pods)" || stop "could not list the application pods (the scale-down was requested, check by hand)"; r_left=0; [ $with_runners = 0 ] || { r_left="$(runner_pods_all | wc -l)" || stop "could not list the runner pods"; }; [ "$n" = 0 ] && [ "$r_left" = 0 ] && break; sleep 5; done
+  echo "  application pods left: $n$([ $with_runners = 1 ] && echo ", runner pods left: $r_left")"
+  { [ "$n" = 0 ] && [ "$r_left" = 0 ]; } || stop "pods are still there after 5 minutes (application $n, runners $r_left): maintenance is NOT confirmed. Wait for them to go, or run off to undo"
   c="$(hz)"; echo "  health now: $c (expected not 200)"; [ "$c" != 200 ] || stop "the application still answers 200 (run off to undo)"
   echo "  checking for 45 s that nothing brings the application back"; sleep 45
-  a="$(jp "$app" '{.spec.syncPolicy.automated}')"; n="$(app_pods)"
-  if [ -n "$a" ] || [ "$n" != 0 ]; then stop "the pause did not hold (auto-sync '$a', pods $n): something re-applied the application or scaled it up. Run off to restore the recorded state"; fi
+  a="$(jp "$app" '{.spec.syncPolicy.automated}')"; n="$(app_pods)" || stop "could not list the application pods"; r_left=0; [ $with_runners = 0 ] || { r_left="$(runner_pods_all | wc -l)" || stop "could not list the runner pods"; }
+  if [ -n "$a" ] || [ "$n" != 0 ] || [ "$r_left" != 0 ]; then stop "the pause did not hold (auto-sync '$a', application pods $n, runner pods $r_left): something re-applied the application or scaled it up. Run off to restore the recorded state"; fi
   echo "  ok: auto-sync still paused, the application is still at 0"
   echo "MAINTENANCE MODE ON. Auto-sync is paused: undo with: $0 off $label";;
 off)
@@ -126,15 +131,19 @@ off)
   echo "  the application is back, health 200"
   # Argo CD compares with the revision it has CACHED (a moved tag is seen only after the next poll). With self-heal back on, a stale
   # revision would re-apply the OLD desired state over a change made by hand. So: hard refresh while still paused, wait for a newer comparison.
-  t_ref=$(date -u +%s); kubectl annotate application -n "$argo_ns" "$app" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
-  fresh=0; rc=""; for _ in $(seq 1 36); do rc="$(jp "$app" '{.status.reconciledAt}')"; if [ -n "$rc" ] && [ "$(date -u -d "$rc" +%s)" -ge "$t_ref" ]; then fresh=1; break; fi; sleep 5; done
+  # reconciledAt has a resolution of one second: take the reference, wait one second, refresh, and accept only a comparison that is STRICTLY later than the reference
+  t_ref=$(date -u +%s); sleep 1; kubectl annotate application -n "$argo_ns" "$app" argocd.argoproj.io/refresh=hard --overwrite >/dev/null
+  fresh=0; rc=""; for _ in $(seq 1 36); do rc="$(jp "$app" '{.status.reconciledAt}')"; if [ -n "$rc" ] && [ "$(date -u -d "$rc" +%s)" -gt "$t_ref" ]; then fresh=1; break; fi; sleep 5; done
   [ $fresh = 1 ] || stop "Argo CD did not compare the application again within 3 minutes after a hard refresh: auto-sync is still paused and the application is back. Check the repo server, then run off again"
   echo "  Argo CD compared again at $rc (revision $(jp "$app" '{.status.sync.revision}' | cut -c1-7)); restoring auto-sync"
-  kubectl patch application -n "$argo_ns" "$app" --type=merge -p "{\"spec\":{\"syncPolicy\":$sp}}" >/dev/null; kubectl annotate application -n "$argo_ns" "$app" "$key-" >/dev/null 2>&1 || true
+  kubectl patch application -n "$argo_ns" "$app" --type=merge -p "{\"spec\":{\"syncPolicy\":$sp}}" >/dev/null
   echo "  auto-sync restored: $(jp "$app" '{.spec.syncPolicy.automated}')"
   rsp="$(pj "$m" 'json.dumps(d["rootSyncPolicy"]) if "rootSyncPolicy" in d else ""')"
   if [ -n "$rsp" ]; then kubectl patch application -n "$argo_ns" "$root_app" --type=merge -p "{\"spec\":{\"syncPolicy\":$rsp}}" >/dev/null; echo "  auto-sync of $root_app restored: $(jp "$root_app" '{.spec.syncPolicy.automated}')"; fi
   s=""; for _ in $(seq 1 24); do s="$(jp "$app" '{.status.sync.status}/{.status.health.status}')"; [ "$s" = Synced/Healthy ] && break; sleep 5; done; echo "  application: $s"
+  # the recovery state stays on the Application until both policies are restored AND the application is Synced and Healthy
+  if [ "$s" != Synced/Healthy ]; then echo "STOP: the application is '$s', not Synced/Healthy: the maintenance marker is KEPT (run off again after you looked at it)" >&2; exit 1; fi
+  kubectl annotate application -n "$argo_ns" "$app" "$key-" >/dev/null
   echo "MAINTENANCE MODE OFF";;
 *) usage;;
 esac
