@@ -1,7 +1,7 @@
 ---
 name: prod-tag-promotion
 description: Use when promoting any deployment repository to production by moving its prod tag, or when listing what still needs promotion.
-version: 1.0.0
+version: 1.1.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -37,6 +37,15 @@ on `environments/<cluster>` branches use `hydrated-deployment-status` instead; t
 - Move tags only inside the allowed time window (not during the node reboot window) and only with a token valid for
   two more hours.
 - Never reuse a confirm string from an earlier promotion; it contains the target commit.
+- When the change migrates data (database schema, a major version), require a completed backup that started less than
+  three hours ago and name the restore path. Moving the tag back does not undo a migration.
+- When the upgrade path is supported only one minor version at a time, promote one `main` commit per run in that order
+  (see "Stepwise promotion"). Do not move `prod` straight to `main`.
+- When the change must be applied by hand first (a database major upgrade) and Argo CD would undo or mis-time it, use
+  `argocd-maintenance-mode` and `postgres-operator-major-upgrade` instead of a plain tag move.
+- After every push to a pull request branch, read the Copilot review (reviews and inline comments) and fix the findings
+  that are sensible on the same branch. Do not merge with open findings. Do not name local-only scripts in committed
+  comments; a reviewer cannot open them.
 
 ## Workflow
 
@@ -64,7 +73,9 @@ namespaces or groups and hides changes), not per line.
 - Use the Helm major version of Argo CD and render from `git archive` copies inside the workspace; Docker cannot see
   the scratchpad. A missing value file is not an error when the application sets `ignoreMissingValueFiles`.
 - Pass `--api-versions` for every CRD group the chart checks with `.Capabilities.APIVersions.Has` (Istio, cert-manager,
-  monitoring, external-secrets). Without them whole templates render empty and the diff looks clean.
+  monitoring, external-secrets), with exactly the string the template tests: `pkg.crossplane.io/v1` satisfies
+  `Has "pkg.crossplane.io/v1"`, while `pkg.crossplane.io/v1/Provider` does not. Without them whole templates render
+  empty and the diff looks clean. Compare the object count before and after to catch it.
 - Check removed objects, changed CRDs, replaced workloads, changed namespace labels (compare with the live namespaces),
   and values of other Applications that the change feeds (for example an app-of-apps entry that drives a gateway chart).
 - Explain every difference. Investigate the rest before going on.
@@ -77,11 +88,28 @@ Create one script per promotion (copy the latest) with:
 - all Applications Synced and Healthy with no running sync (name known exceptions explicitly in the script);
 - the time window and token validity checks;
 - a dry run by default that prints the plan and the exact `--confirm "promote <name> <7 chars>"` string;
+- for migrations: the backup guard (a completed job that started less than three hours ago; do not wait for a new one if
+  it takes an hour) and a measured downtime in the report;
 - tag handling in a temporary bare repository (backup tag, then `prod` pushed with `--force-with-lease` against the
   tag object read before), a wait loop that survives restarts of the controller, and result checks (pods, images,
   URLs, all Applications).
 
 Put the review result in the script header: what changes, what happens at once, what is not done, the rollback.
+
+Run a long script in the background and read its log file afterwards. Do not let the script write to the file its own
+output is redirected to (`tee /dev/stderr` inside `> log` truncates it); the live state is the final check anyway.
+
+### Stepwise promotion
+
+When a vendor supports an upgrade only through intermediate versions (for example Crossplane v1.19, v1.20, v2.0, v2.1,
+v2.2), list the `main` commits since `prod` and pick one per step. Skip commits that were reverted or that leave a
+dependency half done (a provider that needs a sibling package in the same commit).
+
+- Put the step table (commit, versions, what changes) in the script header and let `--status` print it.
+- Derive the current step from the `prod` tag and allow only the next one. A guard compares the live versions with the
+  step table before the move and a wait loop compares them after it.
+- Mark the steps that cannot be undone (a core downgrade is not supported) and wait between steps.
+- Stop on the first failed check; never continue with the next step on a warning you have not read.
 
 ### 4. Run and verify
 
@@ -92,7 +120,8 @@ new alerts, all other Applications healthy.
 ### 5. Roll back
 
 Move `prod` back to the backup tag commit and push it; Argo CD restores the previous state. State what the rollback does
-not undo (applied CRDs, pruned objects, restarted pods).
+not undo (applied CRDs, pruned objects, restarted pods, migrated databases, a core that cannot be downgraded). For a
+migration the way back is the restore of the backup, not the tag.
 
 Roll back only if nobody promoted again in the meantime:
 
