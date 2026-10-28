@@ -1,7 +1,7 @@
 ---
 name: prod-tag-promotion
 description: Use when promoting any deployment repository to production by moving its prod tag, or when listing what still needs promotion.
-version: 1.1.0
+version: 1.2.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -116,6 +116,13 @@ dependency half done (a provider that needs a sibling package in the same commit
 Run the dry run, show the result, and wait for the explicit approval of the user. Then run with the confirm string and
 verify: Application Synced and Healthy on the target commit, workloads ready on the new images, main URLs answer, no
 new alerts, all other Applications healthy.
+
+A check that only looks at ready pods misses pods that never started. After the move compare updated, ready, and
+desired replicas of every StatefulSet and Deployment the change touches (an HorizontalPodAutoscaler may have raised
+the desired count), list pods in `Init`, `CrashLoopBackOff`, or `Error`, and read one new pod's init container log.
+A vendor upgrade can remove an API route that an init script still calls: Gitea 1.26 removed the admin runner
+registration route, and new runner pods crash-looped until the template used the new path. Run a smoke test with a
+non-admin user after every promotion of an application, and test the pod start path, not only the running pods.
 
 ### 5. Roll back
 
