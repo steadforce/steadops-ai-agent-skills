@@ -19,6 +19,8 @@ Each skill provides a task-specific workflow, constraints, and quality checks to
 | `github-actions-efficiency` | Audit workflow execution and suggest changes that reduce CI minutes and cost. |
 | `argo-cd-self-managed-rollout` | Upgrade Argo CD with itself, change the root application, and prune Applications without losing track of what keeps running. |
 | `improve-helmunit-coverage` | Improve Helm unittest coverage for values, environments, and snapshots. |
+| `gitea-helm-upgrade` | Promote a Gitea chart or application upgrade: irreversible migration, backup guard, removed routes, runner pods, and verification. |
+| `gitea-smoke-test` | Verify a Gitea stage after a change with a dedicated restricted user: setup, token handling, and the checks. |
 | `hydrated-deployment-status` | Find and promote pending changes of deployments that production loads from `environments/<cluster>` branches. |
 | `istio-prod-promotion` | Promote an Istio version to production by moving the `prod` tag, step by step with checks. |
 | `postgres-operator-major-upgrade` | Raise the major PostgreSQL version of a Zalando operator cluster in place: clone rehearsal, backup guards, maintenance window, and the Argo CD tag move. |
@@ -56,6 +58,8 @@ Example prompt:
  │       ├── argocd-maintenance-mode/
  │       ├── commit-messages/
  │       ├── create-readme/
+ │       ├── gitea-helm-upgrade/
+ │       ├── gitea-smoke-test/
  │       ├── github-actions-efficiency/
  │       ├── improve-helmunit-coverage/
 │       ├── istio-prod-promotion/
