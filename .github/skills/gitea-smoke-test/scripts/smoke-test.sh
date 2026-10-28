@@ -22,6 +22,7 @@
 #   SMOKE_RUNNER_LABEL  runs-on label of the test workflow (default: ubuntu-latest)
 #   SMOKE_STATE_DIR     where the user name and the token file live (default: $XDG_STATE_HOME/gitea-smoke), mode 700
 #   SMOKE_HOLD          seconds the workflow job sleeps (default 0): for tools that must see a RUNNING job
+#   SMOKE_CHECKOUT      1 adds an actions/checkout step to the workflow (default 0): tests how the runner downloads and runs a real action
 #
 # The user is created with `gitea admin user create --random-password --restricted --must-change-password=false` (no admin
 # rights; the generated password is not shown or stored: the test uses a token) and gets a token with the scopes
@@ -112,7 +113,9 @@ run)
   GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraheader GIT_CONFIG_VALUE_0="Authorization: Basic $auth" GIT_TERMINAL_PROMPT=0 git clone -q --depth 1 "$base/$SMOKE_USER/$repo.git" "$tmp/w" 2>"$tmp/e" || { tail -2 "$tmp/e"; bad "git clone over HTTPS failed"; exit 1; }
   ok "git clone over HTTPS"
   g checkout -q -b "$b2"; mkdir -p "$tmp/w/.gitea/workflows"
-  printf 'name: smoke\non:\n  push:\n    branches: ["smoke/**"]\njobs:\n  smoke:\n    runs-on: %s\n    steps:\n      - run: echo "smoke ok on $(uname -s)"; sleep %s\n' "$runs_on" "${SMOKE_HOLD:-0}" > "$tmp/w/.gitea/workflows/smoke.yaml"
+  # SMOKE_CHECKOUT=1 adds a step that downloads and runs a real action (actions/checkout): a test of how the runner fetches actions and of the node and git in the job image
+  checkout_steps=""; [ "${SMOKE_CHECKOUT:-0}" = 1 ] && checkout_steps='      - uses: actions/checkout@v4\n      - run: git log -1 --oneline\n'
+  printf 'name: smoke\non:\n  push:\n    branches: ["smoke/**"]\njobs:\n  smoke:\n    runs-on: %s\n    steps:\n%b      - run: echo "smoke ok on $(uname -s)"; sleep %s\n' "$runs_on" "$checkout_steps" "${SMOKE_HOLD:-0}" > "$tmp/w/.gitea/workflows/smoke.yaml"
   printf 'smoke %s\n' "$ts" > "$tmp/w/smoke.txt"; g add -A; g commit -q -m "Smoke test $ts"
   g push -q origin "$b2" 2>"$tmp/e" && ok "git push over HTTPS to $b2" || { tail -2 "$tmp/e"; bad "git push over HTTPS failed"; }
   psha="$(g rev-parse HEAD)"

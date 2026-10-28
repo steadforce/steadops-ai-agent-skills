@@ -3,7 +3,7 @@ name: gitea-smoke-test
 description: >-
   Use when verifying a Gitea instance after an upgrade, promotion, or database change with a dedicated non-admin
   local user: setup, token handling, and the checks to run.
-version: 1.1.1
+version: 1.2.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -91,11 +91,12 @@ export SMOKE_EMAIL_DOMAIN=example.org   # a domain without real mailboxes
 ```
 
 Optional settings: `KUBECONFIG`, `GITEA_CONTAINER`, `GITEA_HOSTS` (several health hosts), `GITEA_SSH_PORT`,
-`SMOKE_RUNNER_LABEL` (the `runs-on` label), `SMOKE_STATE_DIR` (default `~/.local/state/gitea-smoke`, mode 700), and
-`SMOKE_HOLD` (seconds the workflow job sleeps, to test tools that must see a running job). The first argument is a
-label for the instance. Setup and teardown run `gitea admin` in the Gitea pod with `kubectl exec`; run needs only the
-token file. The script writes only to its state directory and to the test repository, and it reads the state file as
-data without executing it.
+`SMOKE_RUNNER_LABEL` (the `runs-on` label), `SMOKE_STATE_DIR` (default `~/.local/state/gitea-smoke`, mode 700),
+`SMOKE_HOLD` (seconds the workflow job sleeps, to test tools that must see a running job), and `SMOKE_CHECKOUT=1`
+(adds an `actions/checkout` step, to test a runner upgrade: how actions are downloaded and the node and git in the
+job image). The first argument is a label for the instance. Setup and teardown run `gitea admin` in the Gitea pod
+with `kubectl exec`; run needs only the token file. The script writes only to its state directory and to the test
+repository, and it reads the state file as data without executing it.
 
 ## Not covered
 
