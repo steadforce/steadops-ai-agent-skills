@@ -21,6 +21,7 @@ Each skill provides a task-specific workflow, constraints, and quality checks to
 | `improve-helmunit-coverage` | Improve Helm unittest coverage for values, environments, and snapshots. |
 | `hydrated-deployment-status` | Find and promote pending changes of deployments that production loads from `environments/<cluster>` branches. |
 | `istio-prod-promotion` | Promote an Istio version to production by moving the `prod` tag, step by step with checks. |
+| `postgres-operator-major-upgrade` | Raise the major PostgreSQL version of a Zalando operator cluster in place: clone rehearsal, backup guards, maintenance window, and the Argo CD tag move. |
 | `prod-tag-promotion` | Promote any deployment repository to production by moving the `prod` tag, with render diff, guarded dry run, and rollback. |
 | `prometheus-alertmanager-teams` | Enable Alertmanager with one Teams channel per cluster, handle the webhooks as secrets, and test delivery. |
 | `refactor-helmunit-anchors` | Refactor Helm unittest suites with YAML anchors to reduce duplication. |
@@ -59,6 +60,7 @@ Example prompt:
  │       ├── improve-helmunit-coverage/
 │       ├── istio-prod-promotion/
  │       ├── refactor-helmunit-anchors/
+ │       ├── postgres-operator-major-upgrade/
  │       ├── security-review/
  │       └── skill-review/
  └── README.md
