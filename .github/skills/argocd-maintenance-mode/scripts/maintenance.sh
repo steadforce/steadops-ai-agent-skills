@@ -26,6 +26,7 @@
 #   MAINT_ARGOCD_NS             namespace of Argo CD (default: argocd)
 #   MAINT_ROOT_APP              parent app-of-apps Application (default: applications-root)
 #   MAINT_STATE_DIR             where state files are written (default: $XDG_STATE_HOME/argocd-maintenance)
+#   MAINT_CMD                   command shown in the "undo with" hint (default: this script, set it when a wrapper calls it)
 #
 # --pause-root: the parent is paused whenever it has auto-sync on (with selfHeal it re-applies the child within seconds,
 #   without it any new root revision does); `on` refuses to start without the flag in that case.
@@ -118,7 +119,7 @@ print(json.dumps(d,separators=(",",":")))' "$(date +%FT%T%z)" "$g" "$r" "$with_r
   a="$(jp "$app" '{.spec.syncPolicy.automated}')"; n="$(app_pods)" || stop "could not list the application pods"; r_left=0; [ $with_runners = 0 ] || { r_left="$(runner_pods_all | wc -l)" || stop "could not list the runner pods"; }
   if [ -n "$a" ] || [ "$n" != 0 ] || [ "$r_left" != 0 ]; then stop "the pause did not hold (auto-sync '$a', application pods $n, runner pods $r_left): something re-applied the application or scaled it up. Run off to restore the recorded state"; fi
   echo "  ok: auto-sync still paused, the application is still at 0"
-  echo "MAINTENANCE MODE ON. Auto-sync is paused: undo with: $0 off $label";;
+  echo "MAINTENANCE MODE ON. Auto-sync is paused: undo with: ${MAINT_CMD:-$0} off $label";;
 off)
   m="$(marker)"
   if [ -z "$m" ] && [ $defaults = 1 ]; then lf="$(ls -1t "$state_dir/$app-$label-"*.json 2>/dev/null | head -1 || true)"; if [ -n "$lf" ]; then m="$(cat "$lf")"; echo "  no marker on the Application: using the newest state file $lf"; fi; fi
