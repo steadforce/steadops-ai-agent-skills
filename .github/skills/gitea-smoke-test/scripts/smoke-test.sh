@@ -36,7 +36,10 @@ confirm=""; expect=""; keep=0
 while [ $# -gt 0 ]; do case "$1" in --confirm) confirm="${2:-}"; shift 2;; --expect-version) expect="${2:-}"; shift 2;; --keep) keep=1; shift;; *) usage;; esac; done
 
 base="${GITEA_URL:?set GITEA_URL, for example https://gitea.example.org}"; base="${base%/}"
-host="${base#*://}"; host="${host%%/*}"; hosts="${GITEA_HOSTS:-$host}"; ssh_port="${GITEA_SSH_PORT:-22}"
+scheme="${base%%://*}"; authority="${base#*://}"; authority="${authority%%/*}"
+# the web authority may carry a port (host:8443); the SSH check needs the bare host name
+case "$authority" in \[*) host="${authority%%]*}]";; *) host="${authority%%:*}";; esac
+hosts="${GITEA_HOSTS:-$authority}"; ssh_port="${GITEA_SSH_PORT:-22}"
 ns="${GITEA_NAMESPACE:-}"; dep="${GITEA_DEPLOYMENT:-}"; ctr="${GITEA_CONTAINER:-gitea}"; domain="${SMOKE_EMAIL_DOMAIN:-}"; runs_on="${SMOKE_RUNNER_LABEL:-ubuntu-latest}"
 sdir="${SMOKE_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gitea-smoke}"; envf="$sdir/$label.env"; tokf="$sdir/$label.token"; repo=smoke-test
 
@@ -46,6 +49,8 @@ code() { curl -s -o /dev/null -m 20 -w '%{http_code}' "$@" || true; }
 need_cluster() { [ -n "$ns" ] && [ -n "$dep" ] || stop "set GITEA_NAMESPACE and GITEA_DEPLOYMENT for '$mode'"; }
 gexec() { kubectl exec -n "$ns" "deploy/$dep" -c "$ctr" -- "$@"; }
 # authenticated API call: the header comes from a file descriptor, the token is never an argument
+# like api, but returns only the HTTP status code
+api_code() { curl -s -o /dev/null -m 60 -w '%{http_code}' -X "$1" -K <(printf 'header = "Authorization: token %s"\n' "$(cat "$tokf")") "$base/api/v1$2" || true; }
 api() { local m="$1" p="$2" d="${3:-}"; if [ -n "$d" ]; then curl -s -m 60 -X "$m" -K <(printf 'header = "Authorization: token %s"\n' "$(cat "$tokf")") -H 'Content-Type: application/json' -d "$d" "$base/api/v1$p"; else curl -s -m 60 -X "$m" -K <(printf 'header = "Authorization: token %s"\n' "$(cat "$tokf")") "$base/api/v1$p"; fi; }
 # the state file is read as data (key=value lines), never executed
 read_state() { SMOKE_USER=""; SMOKE_EMAIL=""; SMOKE_CREATED=""; local k v; while IFS='=' read -r k v; do case "$k" in SMOKE_USER) SMOKE_USER="$v";; SMOKE_EMAIL) SMOKE_EMAIL="$v";; SMOKE_CREATED) SMOKE_CREATED="$v";; esac; done < "$envf"; }
@@ -88,11 +93,12 @@ run)
   trap 'rm -rf "$tmp"' EXIT
   ok() { echo "  ok: $*"; }; bad() { echo "  FAIL: $*"; fail=1; }
   echo "== 1/7 health and version"
-  for h in $hosts; do c="$(code "https://$h/api/healthz")"; [ "$c" = 200 ] && ok "200 https://$h/api/healthz" || bad "$c https://$h/api/healthz"; done
+  for h in $hosts; do c="$(code "$scheme://$h/api/healthz")"; [ "$c" = 200 ] && ok "200 $scheme://$h/api/healthz" || bad "$c $scheme://$h/api/healthz"; done
   v="$(curl -s -m 15 "$base/api/v1/version" | pj 'd.get("version")')"; if [ -n "$expect" ]; then [ "$v" = "$expect" ] && ok "version $v" || bad "version $v, expected $expect"; else ok "version $v"; fi
   echo "== 2/7 token and rights"
   r="$(api GET /user)"; [ "$(echo "$r" | pj 'd.get("login")')" = "$SMOKE_USER" ] && ok "the token authenticates as $SMOKE_USER" || { bad "the token does not authenticate (answer: $(echo "$r" | cut -c1-120))"; echo "FAIL: cannot go on without a working token"; exit 1; }
-  [ "$(echo "$r" | pj 'd.get("is_admin")')" = False ] && ok "the user is not an admin" || bad "the user is an ADMIN"
+  [ "$(echo "$r" | pj 'd.get("is_admin")')" = False ] || { echo "FAIL: the smoke-test user is an ADMIN: refusing to run mutating tests with it (delete the user and set it up again)"; exit 1; }
+  ok "the user is not an admin"
   echo "== 3/7 repository $SMOKE_USER/$repo"
   if [ "$(api GET "/repos/$SMOKE_USER/$repo" | pj 'd.get("name","")')" != "$repo" ]; then api POST /user/repos "{\"name\":\"$repo\",\"private\":true,\"auto_init\":true,\"default_branch\":\"main\",\"description\":\"smoke test repository, may be deleted\"}" >/dev/null; sleep 3; fi
   [ "$(api GET "/repos/$SMOKE_USER/$repo" | pj 'd.get("name","")')" = "$repo" ] && ok "repository exists" || { bad "repository missing and not creatable"; exit 1; }
@@ -120,7 +126,10 @@ print("none" if not r else (r[0].get("conclusion") or r[0].get("status") or "?")
   case "$res" in success) ok "the workflow run reached success on a runner";; none) bad "no workflow run appeared for ${psha:0:7} (Actions disabled for the repository, or no runner)";; *) bad "the workflow run ended as '$res' (read its job log: actions/runs/<id>/jobs and actions/jobs/<id>/logs)";; esac
   echo "== 7/7 SSH port"
   timeout 5 bash -c "</dev/tcp/$host/$ssh_port" && ok "SSH port $ssh_port open on $host" || bad "SSH port $ssh_port closed on $host"
-  if [ $keep = 0 ]; then for b in "$b1" "$b2"; do api DELETE "/repos/$SMOKE_USER/$repo/branches/$b" >/dev/null; done; echo "  cleanup: branches $b1 and $b2 deleted (the Actions run stays until the retention removes it)"; fi
+  if [ $keep = 0 ]; then
+    cleaned=1; for b in "$b1" "$b2"; do c="$(api_code DELETE "/repos/$SMOKE_USER/$repo/branches/$b")"; case "$c" in 204|200|404) ;; *) bad "deleting branch $b answered HTTP $c: it was NOT deleted"; cleaned=0;; esac; done
+    [ $cleaned = 1 ] && echo "  cleanup: branches $b1 and $b2 deleted (the Actions run stays until the retention removes it)"
+  fi
   echo "  NOT covered, test by hand: login through the identity provider, browser POSTs through external domains, SSH key login"
   echo; [ $fail = 0 ] && echo "SMOKE TEST PASSED on $label ($v, $(date +%H:%M))" || echo "SMOKE TEST FAILED on $label: see the FAIL lines"; exit $fail;;
 teardown)

@@ -3,7 +3,7 @@ name: gitea-smoke-test
 description: >-
   Use when verifying a Gitea instance after an upgrade, promotion, or database change with a dedicated non-admin
   local user: setup, token handling, and the checks to run.
-version: 1.1.0
+version: 1.1.1
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -55,14 +55,16 @@ A restricted user cannot create organizations, so the test repository `smoke-tes
 ### 2. Run
 
 1. Health endpoint on every host the stage serves, and the version (compare with the expected one).
-2. The token authenticates and the user is not an admin.
+2. The token authenticates and the user is not an admin. Stop at once if it is an admin: do not run the mutating
+   tests with an admin token.
 3. The repository exists (create it once, private).
 4. A commit through the API on a short-lived branch.
 5. `git clone` and `git push` over HTTPS of a branch that carries a workflow file that only prints a line.
 6. The workflow run of that commit (`GET /repos/<user>/<repo>/actions/runs?head_sha=<sha>`) reaches success within a
    few minutes on a runner.
-7. The SSH port accepts a connection.
-8. Delete the branches. The run history stays until the retention removes it.
+7. The SSH port accepts a connection (use the bare host name: the web URL may carry another port).
+8. Delete the branches and check the result of each delete. A failed delete is a test failure, not a success. The run
+   history stays until the retention removes it.
 
 ### 3. Read a failure
 
