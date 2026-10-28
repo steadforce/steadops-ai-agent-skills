@@ -3,7 +3,7 @@ name: gitea-helm-upgrade
 description: >-
   Use when promoting a Gitea Helm chart or application upgrade to production: schema migration, backup guard,
   removed config and API routes, runner pods, and verification.
-version: 1.0.0
+version: 1.0.1
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -49,6 +49,13 @@ List removed or renamed settings, routes, and environment handling, then compare
 Examples: from 1.26 the chart writes `app.ini` with `gitea config edit-ini --apply-env` and not with
 `environment-to-ini`; 1.26 adds cross-origin protection for browser POSTs through proxies; deprecated authentication
 sources disappear in 1.25.
+
+A setting that you remove from the chart values does NOT leave the configuration. The init step merges the rendered
+config into the `app.ini` on the data volume (`gitea config edit-ini --apply-env`), so a renamed or moved key keeps its
+old line for ever and Gitea keeps logging the deprecation. After such a change read the effective `app.ini` (the
+sections only, no secrets) and the start log, not only the rendered Secret. Remove the stale line with a guarded,
+one-key edit and restart Gitea, or rebuild the file with `gitea config edit-ini --config-keep-keys`. Until then count the
+known deprecation line as expected in the post-start error check.
 
 ### 2. Probe removed routes
 
