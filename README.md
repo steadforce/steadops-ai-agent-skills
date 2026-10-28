@@ -31,6 +31,10 @@ Each skill provides a task-specific workflow, constraints, and quality checks to
 | `skill-review` | Review skill files for metadata quality, constraints, and internal consistency. |
 | `staged-cleanup-by-hand` | Remove retired or orphaned cluster resources in reviewable groups with export, dry run, and confirm string. |
 
+Some skills ship a parametrised helper script under their `scripts/` folder (for example `gitea-smoke-test` and
+`argocd-maintenance-mode`). The scripts hold no instance-specific values: hosts, namespaces, and application names come
+from environment variables that the skill documents.
+
 ## How to use a skill
 
 1. Open a target repository in your workspace.
