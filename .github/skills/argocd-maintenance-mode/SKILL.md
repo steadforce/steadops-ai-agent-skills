@@ -1,7 +1,7 @@
 ---
 name: argocd-maintenance-mode
 description: Use when an application must be switched off for a maintenance window while Argo CD auto-sync is paused, for example a database major upgrade that needs the application disconnected.
-version: 1.0.0
+version: 1.0.1
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -27,13 +27,18 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
 
 ## Constraints
 
-- Do not only pause the application. Read the sync policy of its parent (the app-of-apps root). A root with
-  `selfHeal: true` re-applies the child's spec from Git within seconds and silently restores the child's auto-sync. On
-  dev this scaled Gitea back up after about two minutes. Pause the parent too, or refuse to start.
+- Do not only pause the application. Read the sync policy of its parent (the app-of-apps root) and pause the parent
+  whenever it has auto-sync on, with or without `selfHeal`. With `selfHeal: true` it re-applies the child's spec from
+  Git within seconds and silently restores the child's auto-sync (on dev this scaled Gitea back up after about two
+  minutes). Without `selfHeal` any new root revision, such as a merged pull request or a moved tag, still syncs and
+  restores it. Refuse to start when the parent is not paused.
 - Pause the parent first, wait about 25 seconds until its controller is quiet, then pause the child. A sync that was
   decided before the pause still runs and undoes it (a race found in the second dev test).
 - Do not start while jobs are active (runners that started a task in the last ten minutes) unless the user accepts that
   running jobs fail.
+- Do not scale down while a sync is pending or running. Pausing auto-sync does not cancel an operation in flight, and
+  a slow hook or rollout can outlast the waits below. Require that neither Application has an `operation` and that
+  `status.operationState.phase` is not `Running`, wait for it, and abort without scaling on a timeout.
 - Do not rely on the pause: after scaling to zero, watch for 45 seconds that auto-sync is still off and no pod came back.
 - Do not switch off on a failed check of the maintenance work. The script holds and prints what to look at; the user
   decides.
@@ -44,8 +49,9 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
 1. **Record the state** before changing anything: replicas of the Deployment and the runners, the application's
    `syncPolicy`, the parent's `syncPolicy`. Store it as an annotation on the Application (so `off` works from any shell)
    and in a private file with a time stamp.
-2. **On**: pause the parent (if its `selfHeal` is on), wait, pause the child, scale to zero, wait until the pods are
-   gone, check that the health endpoint no longer answers 200, then hold-check for 45 seconds.
+2. **On**: pause the parent (if its auto-sync is on), wait, pause the child, wait until neither Application has a
+   pending or running sync (abort on a timeout), scale to zero, wait until the pods are gone, check that the health
+   endpoint no longer answers 200, then hold-check for 45 seconds.
    A HorizontalPodAutoscaler does not scale a target that is at zero replicas.
 3. **Do the maintenance work** and verify it while the application is off. If the live resource must stay as changed
    (a database version), move the `prod` tag to the commit that records the new state before step 4, while the sync is

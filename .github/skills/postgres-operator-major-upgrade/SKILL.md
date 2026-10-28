@@ -3,7 +3,7 @@ name: postgres-operator-major-upgrade
 description: >-
   Use when raising the major PostgreSQL version of a Zalando postgres-operator cluster in place
   (for example 14 to 15): rehearsal, backups, maintenance window, and the Argo CD interplay.
-version: 1.0.0
+version: 1.0.1
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -30,7 +30,8 @@ place on the leader and rebuild the replicas.
 
 - `pg_upgrade` cannot be undone. The only way back is a restore: the logical backup (state of its start time) or
   WAL-G point in time on the old lineage. The WAL path contains the major version, so the old lineage stays untouched
-  and the new one has no base backup until you take one.
+  and the new one has no base backup until you take one. Writes after the restart live only in the new lineage: neither
+  the logical dump nor the old WAL can restore them.
 - Do not upgrade the operator or the Spilo image in the same window. A new Spilo image changes every cluster of the
   operator. Check which versions the image ships (`ls /usr/lib/postgresql` in a pod) and the operator's
   `major_version_upgrade` range before you plan.
@@ -84,17 +85,20 @@ Read the Copilot review after the push.
 ### 5. Window
 
 1. Maintenance mode on. Wait until no application session is left in `pg_stat_activity`.
-2. Take the facts while the application is off (row counts of key tables, schema version, table count, invalid
-   indexes, extensions, size). Nothing can write now, so the counts must be identical afterwards.
+2. Take the facts while the application is off. Gate on the logical invariants: row counts of key tables, the
+   application schema version, the number of user tables, invalid indexes (must be none), and the extension names.
+   Nothing can write now, so these must be identical afterwards. Record, but do not gate on, the diagnostics that a
+   healthy upgrade changes: database size, catalog contents, statistics, extension versions.
 3. Patch `spec.postgresql.version`. Wait for status `Running`, `PGVERSION` of every pod at the target, every pod
    ready, every Patroni member healthy, and `server_version_num` of the target on every pod (up to 40 minutes).
-4. Compare the facts. Run `ANALYZE` if tables have no statistics. Stop on any difference.
-5. Move the `prod` tag to the merge commit of the pull request while the sync is paused (see
+4. Compare the facts. Run `ANALYZE` if tables have no statistics. Stop on a difference in an invariant.
+5. Take a WAL-G base backup for the new lineage with the Spilo backup script and check that the newest entry is newer
+   than the upgrade. Do this before the application is switched on. If it fails, hold with the application off and
+   let the user decide; only the user can accept a window of writes that cannot be recovered.
+6. Move the `prod` tag to the merge commit of the pull request while the sync is paused (see
    `prod-tag-promotion` for the backup tag), then maintenance mode off.
-6. Check health on all hosts, the application version, git over SSH, the logs for errors, runners, ExternalSecrets,
+7. Check health on all hosts, the application version, git over SSH, the logs for errors, runners, ExternalSecrets,
    and all Applications. Confirm the `postgresql` resource still says the target version.
-7. Take a WAL-G base backup for the new lineage with the Spilo backup script; until it exists a restore needs the
-   logical backup plus the old lineage. The nightly base backup also covers it.
 
 On any failed check after step 1, stop with the application off and print what to look at. Do not switch it on by
 itself.
