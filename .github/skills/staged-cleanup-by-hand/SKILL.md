@@ -28,7 +28,8 @@ metadata:
   but only through a verified non-cascading procedure (see the owner rule in step 4).
 - Do not delete namespaces, PVCs, or database custom resources before the reclaim policy of every bound volume is
   verified as `Retain` (or the data is backed up and the owner approved). With policy `Delete` the storage goes with the
-  claim. Changing a policy needs the owner's approval. Never delete persistent volumes or data on the storage server.
+  claim. Changing a policy needs the owner's approval. Never delete data on the storage server; the owner does that. A
+  PersistentVolume object is removed only when it is `Released` and its directory is gone (step 6).
 - Do not run the delete without the exact confirm string that the dry run prints.
 - Do not write secrets into the export. A custom resource can carry keys as literal values (for example `spec.env` of
   a database resource). Redact values of names that contain KEY, SECRET, TOKEN, or PASS, check the export for what is
