@@ -1,7 +1,7 @@
 ---
 name: argocd-maintenance-mode
 description: Use when an application must be switched off for a maintenance window while Argo CD auto-sync is paused, for example a database major upgrade that needs the application disconnected.
-version: 1.0.3
+version: 1.1.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -70,6 +70,24 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
    annotation, and wait for Synced and Healthy.
 5. If the script died, restore from the state file; a `--defaults` fallback assumes one replica and auto-sync with
    prune and self-heal and must be chosen on purpose.
+
+## Script
+
+`./scripts/maintenance.sh` implements `on`, `off`, and `status`. Everything specific to your cluster comes from the
+environment:
+
+```sh
+export MAINT_APP=my-app MAINT_NAMESPACE=my-namespace MAINT_HEALTH_URL=https://app.example.org/healthz
+export MAINT_RUNNERS_STS=my-runner   # optional: runners or workers that are scaled and checked for running jobs
+./scripts/maintenance.sh on prod --pause-root
+./scripts/maintenance.sh off prod
+```
+
+Optional settings: `KUBECONFIG`, `MAINT_DEPLOYMENT` (default: the Application name), `MAINT_RUNNER_CONTAINER`,
+`MAINT_JOB_CONTAINER_FILTER` and `MAINT_JOB_START_PATTERN` (how running jobs are found), `MAINT_ARGOCD_NS`,
+`MAINT_ROOT_APP`, and `MAINT_STATE_DIR` (default `~/.local/state/argocd-maintenance`). The first argument is a label for
+the stage. The script records the state in an annotation on the Application and in a file in the state directory, and it
+changes only sync policies and replica counts.
 
 ## Test first
 
