@@ -3,7 +3,7 @@ name: gitea-smoke-test
 description: >-
   Use when verifying a Gitea instance after an upgrade, promotion, or database change with a dedicated non-admin
   local user: setup, token handling, and the checks to run.
-version: 1.0.0
+version: 1.1.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -75,6 +75,25 @@ pods and their init containers (see `gitea-helm-upgrade`).
 
 `gitea admin user delete --username <name> --purge` removes the user, its repositories, and its tokens. Delete the local
 token and state files afterwards. Keep the user between runs: creating it needs an admin action in the pod every time.
+
+## Script
+
+`./scripts/smoke-test.sh` implements setup, run, status, and teardown. Nothing that is specific to your instance is
+hard-coded; it comes from the environment:
+
+```sh
+export GITEA_URL=https://gitea.example.org GITEA_NAMESPACE=gitea GITEA_DEPLOYMENT=gitea
+export SMOKE_EMAIL_DOMAIN=example.org   # a domain without real mailboxes
+./scripts/smoke-test.sh setup prod      # dry run; creates the user with --confirm "create smoke-test user on prod"
+./scripts/smoke-test.sh run prod --expect-version 1.26.1
+```
+
+Optional settings: `KUBECONFIG`, `GITEA_CONTAINER`, `GITEA_HOSTS` (several health hosts), `GITEA_SSH_PORT`,
+`SMOKE_RUNNER_LABEL` (the `runs-on` label), `SMOKE_STATE_DIR` (default `~/.local/state/gitea-smoke`, mode 700), and
+`SMOKE_HOLD` (seconds the workflow job sleeps, to test tools that must see a running job). The first argument is a
+label for the instance. Setup and teardown run `gitea admin` in the Gitea pod with `kubectl exec`; run needs only the
+token file. The script writes only to its state directory and to the test repository, and it reads the state file as
+data without executing it.
 
 ## Not covered
 
