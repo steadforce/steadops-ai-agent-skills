@@ -1,7 +1,7 @@
 ---
 name: staged-cleanup-by-hand
 description: Use when removing orphaned or retired Kubernetes resources from a cluster in reviewable groups with a dry run and an export.
-version: 1.0.0
+version: 1.1.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -30,6 +30,11 @@ metadata:
   verified as `Retain` (or the data is backed up and the owner approved). With policy `Delete` the storage goes with the
   claim. Changing a policy needs the owner's approval. Never delete persistent volumes or data on the storage server.
 - Do not run the delete without the exact confirm string that the dry run prints.
+- Do not write secrets into the export. A custom resource can carry keys as literal values (for example `spec.env` of
+  a database resource). Redact values of names that contain KEY, SECRET, TOKEN, or PASS, check the export for what is
+  left, and tell the user that the resource held credentials so they can rotate them.
+- Do not let a failing pipeline end the script silently under `set -e` and `pipefail`: a missing object makes `grep`
+  or `kubectl` exit non-zero. Handle the empty case on purpose (`|| true`) and print what was checked.
 
 ## Workflow
 
@@ -53,6 +58,9 @@ metadata:
    after the owner approved a procedure that does not cascade (for example removing the finalizer first), and stop if
    the later groups could not be kept apart.
 5. After each group: list what is left, check all Applications, check the public URLs.
+6. With reclaim policy `Retain` the deleted claims leave their volumes in `Released` and the directories on the
+   storage server stay. Print the volume names and paths. Delete the volume objects only after the owner removed the
+   directories, and list the object-store prefixes (WAL archives) that stay for a later cleanup.
 
 ## Report
 
