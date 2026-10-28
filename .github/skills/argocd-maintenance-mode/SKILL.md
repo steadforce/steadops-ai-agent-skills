@@ -1,7 +1,7 @@
 ---
 name: argocd-maintenance-mode
 description: Use when an application must be switched off for a maintenance window while Argo CD auto-sync is paused, for example a database major upgrade that needs the application disconnected.
-version: 1.0.1
+version: 1.0.2
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -34,8 +34,11 @@ Argo CD does not scale it back. Nothing in the data is changed. Use it with `pos
   restores it. Refuse to start when the parent is not paused.
 - Pause the parent first, wait about 25 seconds until its controller is quiet, then pause the child. A sync that was
   decided before the pause still runs and undoes it (a race found in the second dev test).
-- Do not start while jobs are active (runners that started a task in the last ten minutes) unless the user accepts that
-  running jobs fail.
+- Do not start while jobs are running unless the user accepts that running jobs fail. A check for tasks that started
+  in the last ten minutes misses a long job that started earlier and is still running. Ask the runners for their
+  running job containers (with rootless docker in each runner pod: `docker ps` filtered on the job container name
+  prefix) or ask the CI system for running jobs, and keep the recent-start check as a second signal. Prove the
+  detector with a job that sleeps: a job that only prints a line is gone in seconds and slips between two polls.
 - Do not scale down while a sync is pending or running. Pausing auto-sync does not cancel an operation in flight, and
   a slow hook or rollout can outlast the waits below. Require that neither Application has an `operation` and that
   `status.operationState.phase` is not `Running`, wait for it, and abort without scaling on a timeout.
