@@ -14,6 +14,7 @@ Each skill provides a task-specific workflow, constraints, and quality checks to
 | Skill | Purpose |
 | --- | --- |
 | `argocd-maintenance-mode` | Switch an application off for a maintenance window with Argo CD auto-sync paused on the app and on its root, and switch it on again safely. |
+| `crossplane-stepwise-upgrade` | Upgrade Crossplane and its providers one supported step at a time, with blockers, family provider handling, and expected transients. |
 | `commit-messages` | Draft commit messages that follow repository conventions and atomic commit principles. |
 | `create-readme` | Create or rewrite `README.md` files with structure, validation, and runnable examples. |
 | `github-actions-efficiency` | Audit workflow execution and suggest changes that reduce CI minutes and cost. |
@@ -24,8 +25,10 @@ Each skill provides a task-specific workflow, constraints, and quality checks to
 | `hydrated-deployment-status` | Find and promote pending changes of deployments that production loads from `environments/<cluster>` branches. |
 | `istio-prod-promotion` | Promote an Istio version to production by moving the `prod` tag, step by step with checks. |
 | `postgres-operator-major-upgrade` | Raise the major PostgreSQL version of a Zalando operator cluster in place: clone rehearsal, backup guards, maintenance window, and the Argo CD tag move. |
+| `node-disk-triage` | Find what fills a Kubernetes node disk, free it safely, and set a permanent journal and storage limit. |
 | `prod-tag-promotion` | Promote any deployment repository to production by moving the `prod` tag, with render diff, guarded dry run, and rollback. |
 | `prometheus-alertmanager-teams` | Enable Alertmanager with one Teams channel per cluster, handle the webhooks as secrets, and test delivery. |
+| `renovate-auth-canary` | Give a Renovate stage a private test repository and dedicated owner so git authentication regressions fail before production. |
 | `refactor-helmunit-anchors` | Refactor Helm unittest suites with YAML anchors to reduce duplication. |
 | `security-review` | Run a structured security review workflow with dependency and exposure checks. |
 | `skill-review` | Review skill files for metadata quality, constraints, and internal consistency. |
@@ -60,6 +63,7 @@ Example prompt:
  │   ├── copilot-instructions.md
  │   └── skills/
  │       ├── argocd-maintenance-mode/
+ │       ├── crossplane-stepwise-upgrade/
  │       ├── commit-messages/
  │       ├── create-readme/
  │       ├── gitea-helm-upgrade/
@@ -68,7 +72,9 @@ Example prompt:
  │       ├── improve-helmunit-coverage/
 │       ├── istio-prod-promotion/
  │       ├── refactor-helmunit-anchors/
+ │       ├── node-disk-triage/
  │       ├── postgres-operator-major-upgrade/
+ │       ├── renovate-auth-canary/
  │       ├── security-review/
  │       └── skill-review/
  └── README.md

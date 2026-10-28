@@ -1,7 +1,7 @@
 ---
 name: prod-tag-promotion
 description: Use when promoting any deployment repository to production by moving its prod tag, or when listing what still needs promotion.
-version: 1.2.0
+version: 1.2.1
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -110,6 +110,8 @@ dependency half done (a provider that needs a sibling package in the same commit
   step table before the move and a wait loop compares them after it.
 - Mark the steps that cannot be undone (a core downgrade is not supported) and wait between steps.
 - Stop on the first failed check; never continue with the next step on a warning you have not read.
+- Retry the final checks for about 90 seconds. A provider restart makes the Argo CD health flip to Degraded for a
+  moment and delays a conversion webhook for minutes; see `crossplane-stepwise-upgrade` before you call that a failure.
 
 ### 4. Run and verify
 
