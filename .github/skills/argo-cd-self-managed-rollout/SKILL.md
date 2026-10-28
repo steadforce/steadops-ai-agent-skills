@@ -25,8 +25,10 @@ metadata:
 
 - Do not rely on the Argo CD UI or CLI while Argo CD updates itself; poll with `kubectl` and tolerate short API gaps.
 - Do not delete an Application before you know its finalizers. Without a `resources-finalizer.argocd.argoproj.io`
-  finalizer all its resources keep running and nothing is cleaned up. With the plain finalizer, the `/foreground`
-  variant, or the `/background` variant the delete cascades and removes the managed resources. Check for all three
+  finalizer all its resources keep running and nothing is cleaned up. With the plain finalizer (foreground cascade, the
+  default) or the `/background` variant the delete cascades and removes the managed resources. Argo CD documents only
+  these two. Treat any other `resources-finalizer.argocd.argoproj.io/<suffix>` as unknown: the Application may stay in
+  `Terminating`, so stop and read what the controller does with it. Check the finalizers first
   (`kubectl get application <name> -o jsonpath='{.metadata.finalizers}'`).
 - Do not delete an Application whose resources must stay for later cleanup groups until the finalizer is gone: remove the
   finalizer first with an approved non-cascading procedure, then read `staged-cleanup-by-hand` step 4 for the other

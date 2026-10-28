@@ -133,12 +133,15 @@ Steps:
 
    ```sh
    HELM_TMP=$(mktemp -d)
-   HOME="$HELM_TMP" helm dependency list .
+   HELM_CONFIG_HOME="$HELM_TMP/config" HELM_CACHE_HOME="$HELM_TMP/cache" HELM_DATA_HOME="$HELM_TMP/data" \
+     helm dependency list .
    rm -rf "$HELM_TMP"
    ```
 
    Its `STATUS` column reports `ok` when the downloaded chart matches, or flags it when it does not
-   (for example missing or out of date). Treat anything other than `ok` as a mismatch.
+   (for example missing or out of date). Treat anything other than `ok` as a mismatch, with one exception: `unpacked`
+   means the dependency is present as an extracted chart directory. Read that directory's own `Chart.yaml` and accept
+   it when its version satisfies the declared requirement; otherwise it is a mismatch.
 5. If the packaged form's filename does not clearly encode the version, unpack the `.tgz` into a temp directory to
    read the version straight from its own `Chart.yaml` — never into `charts/` itself (see "Unpacking a packaged
    `.tgz` dependency" below).
@@ -171,13 +174,14 @@ way the Docker validation commands already isolate `HOME` (see "Validation comma
 
 ```sh
 HELM_TMP=$(mktemp -d)
-HOME="$HELM_TMP" helm dependency list .
+HELM_CONFIG_HOME="$HELM_TMP/config" HELM_CACHE_HOME="$HELM_TMP/cache" HELM_DATA_HOME="$HELM_TMP/data" \
+  helm dependency list .
 rm -rf "$HELM_TMP"
 ```
 
-Setting `HOME` is enough because Helm derives `HELM_CONFIG_HOME`, `HELM_CACHE_HOME`, and `HELM_DATA_HOME` from it
-by default; set those variables individually instead only if `HOME` cannot be overridden in the current
-environment. Always remove the temp directory afterward.
+Set all three Helm directory variables. An exported `HELM_CONFIG_HOME`, `HELM_CACHE_HOME`, or `HELM_DATA_HOME` (and
+the XDG variables) takes precedence over `HOME`, so a `HOME`-only override can still read or modify the user's Helm
+state. Always remove the temp directory afterward.
 
 ## What to test directly
 

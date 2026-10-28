@@ -355,7 +355,11 @@ outside the copied chart directory: Helm treats every file there as part of the
 chart unless `.helmignore` excludes it, so a Helm home inside the copy would
 end up in `.Files`, `helm lint`, and packaged charts. Extract the README's
 fenced snippets into the validation directory too, then run them in README
-order with `bash "$validation_dir/blocks/<n>.sh"`. The trap removes everything:
+order. Each `bash "$validation_dir/blocks/<n>.sh"` is a separate shell, so an
+`export` or `cd` in one block is lost before the next. Blocks that continue one
+shell session run in one process instead: `source` them in order inside the
+isolated subshell (a block's `exit` then ends the run). Independent blocks stay
+separate invocations. The trap removes everything:
 
 ```sh
  (
