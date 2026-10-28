@@ -3,7 +3,7 @@ name: gitea-helm-upgrade
 description: >-
   Use when promoting a Gitea Helm chart or application upgrade to production: schema migration, backup guard,
   removed config and API routes, runner pods, and verification.
-version: 1.0.1
+version: 1.0.2
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -55,7 +55,8 @@ config into the `app.ini` on the data volume (`gitea config edit-ini --apply-env
 old line for ever and Gitea keeps logging the deprecation. After such a change read the effective `app.ini` (the
 sections only, no secrets) and the start log, not only the rendered Secret. Remove the stale line with a guarded,
 one-key edit and restart Gitea, or rebuild the file with `gitea config edit-ini --config-keep-keys`. Until then count the
-known deprecation line as expected in the post-start error check.
+known deprecation line as expected in the post-start error check. The chart does not offer a reset yet; this is
+requested upstream as helm-gitea issue 1117 (a related report, 1109, covers the same effect for the inline config Secret).
 
 ### 2. Probe removed routes
 
