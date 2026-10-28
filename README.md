@@ -13,6 +13,7 @@ Each skill provides a task-specific workflow, constraints, and quality checks to
 
 | Skill | Purpose |
 | --- | --- |
+| `argocd-maintenance-mode` | Switch an application off for a maintenance window with Argo CD auto-sync paused on the app and on its root, and switch it on again safely. |
 | `commit-messages` | Draft commit messages that follow repository conventions and atomic commit principles. |
 | `create-readme` | Create or rewrite `README.md` files with structure, validation, and runnable examples. |
 | `github-actions-efficiency` | Audit workflow execution and suggest changes that reduce CI minutes and cost. |
@@ -51,6 +52,7 @@ Example prompt:
  ├── .github/
  │   ├── copilot-instructions.md
  │   └── skills/
+ │       ├── argocd-maintenance-mode/
  │       ├── commit-messages/
  │       ├── create-readme/
  │       ├── github-actions-efficiency/
