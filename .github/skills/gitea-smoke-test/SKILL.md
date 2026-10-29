@@ -3,7 +3,7 @@ name: gitea-smoke-test
 description: >-
   Use when verifying a Gitea instance after an upgrade, promotion, or database change with a dedicated non-admin
   local user: setup, token handling, and the checks to run.
-version: 1.2.0
+version: 1.2.1
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -102,6 +102,19 @@ repository, and it reads the state file as data without executing it.
 
 Login through the identity provider, browser POSTs through the external domains (cross-origin protection), and SSH key
 login. Test those by hand after a promotion.
+
+For the SSH key login use the user of the built-in SSH server, which is the Gitea `RUN_USER` (for example `gitea`),
+not `git`. The clone URL in the web UI shows it. With the wrong user the log says `Invalid SSH username git - must use
+<user> for all git operations via ssh` and the client sees only `Permission denied (publickey)`. If the client says
+`too many authentication failures`, it offered too many keys: pin one with `-o IdentitiesOnly=yes -i <key>`:
+
+```bash
+ssh -o IdentitiesOnly=yes -i ~/.ssh/<key> -T -p <ssh port> <run user>@<host>
+```
+
+Success prints `Hi there, <user>! You've successfully authenticated with the key named ...`; the line that Gitea does
+not provide shell access is the normal reply. The script cannot do this check: it has no key of the test user and does
+not accept host keys by itself.
 
 ## Report
 
