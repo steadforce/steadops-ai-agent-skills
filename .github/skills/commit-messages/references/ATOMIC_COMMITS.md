@@ -4,7 +4,7 @@ Each commit should do ONE logical thing. This makes code easier to review, rever
 
 ## The Core Principle
 
-**One commit = one logical change**
+### One commit = one logical change
 
 If your subject line contains "and", you probably need two commits.
 

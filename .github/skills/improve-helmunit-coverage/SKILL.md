@@ -24,6 +24,7 @@ environment-specific rendering, or snapshots are involved.
 ## When to use
 
 Use this skill for requests like:
+
 - "Improve Helm unittest coverage"
 - "Check Helm unittest coverage gaps"
 - "Add tests for overridden values"
@@ -38,6 +39,16 @@ Use this skill for requests like:
 - Keep tests readable and maintainable.
 - Treat snapshot assertions as supporting evidence only; snapshot-only tests do not count as override coverage.
 - Finish with a clean passing Helm unittest run.
+
+## Branch base and CI on main
+
+- Fetch the real remote `main` and branch from it (`git fetch origin main`, then `git switch -c <branch> FETCH_HEAD`),
+  not from a stale local `main`; the test files and workflows of newer commits may be missing locally.
+- Search `tests/` as well as the templates before changing a value that tests may assert (image hosts, domains, names).
+- Run `helm unittest` locally before every push. After the merge, check the CI run on `main`: a rename that touches
+  asserted values breaks `main` even when the pull request was green.
+- Argo CD renders with Helm 4, which drops values that are `null`; a Helm 3 unittest image may disagree. Compare the
+  unittest plugin and Helm version with the one CI uses.
 
 ## Large workspace search strategy
 
@@ -60,11 +71,13 @@ Coverage should focus on behavior that can regress:
 5. Which are not covered by direct assertions at all?
 
 Do not assume every value in a values file must be tested. Only test values that:
+
 - affect rendered manifests
 - represent intentional platform or environment behavior
 - protect against likely regressions
 
 Coverage accounting rule:
+
 - only direct behavior assertions count as coverage for override behavior
 - snapshot-only checks are considered unscored support checks and must be paired with direct assertions
 
@@ -77,22 +90,98 @@ Coverage accounting rule:
    - `tests/*_test.yaml`
    - in large workspaces, run repository-scoped terminal search instead of global
      workspace search to avoid task queue limit errors
-2. Run Helm unittest to establish baseline.
-3. If snapshots fail due to intentional changes, update snapshots first to restore a clean baseline.
-4. Determine hydration scope from `helm-config.yaml`:
+2. Always verify downloaded chart dependencies before doing anything else:
+   - compare each dependency version present in the `charts/` folder against the version declared for it in
+     `Chart.yaml`
+   - do this on every run of this skill, regardless of whether the request mentions dependencies
+   - see "Validating downloaded chart dependency versions" below
+3. Run Helm unittest to establish baseline.
+4. If snapshots fail due to intentional changes, update snapshots first to restore a clean baseline.
+5. Determine hydration scope from `helm-config.yaml`:
    - identify all environments
    - identify which value files each environment uses
    - keep scope to root-level value files from the repository unless explicitly requested otherwise
    - compare discovered root environment value files (for example `values-<env>.yaml`) with configured environments
    - if a matching environment is missing in `helm-config.yaml`, add it with the correct `apis` and `valueFiles`
-5. Map overridden values to rendered outputs:
+   - for every environment whose name encodes a stage (for example a `-dev` or `-prod` suffix), verify its
+     `valueFiles` list actually references the correspondingly named stage file (`values-development.yaml` vs
+     `values-production.yaml`) and not a mismatched one — see "Validating helm-config.yaml value file wiring" below
+6. Map overridden values to rendered outputs:
    - inspect templates directly
    - inspect dependency chart templates if behavior comes from a subchart
    - render templates locally if merge behavior is unclear
-6. Add or improve tests.
-7. Re-run Helm unittest until all suites pass.
-8. As the final step, use the `commit-messages` skill to draft and validate a message that matches repository
+7. Add or improve tests.
+8. Re-run Helm unittest until all suites pass.
+9. As the final step, use the `commit-messages` skill to draft and validate a message that matches repository
    conventions and summarizes the coverage changes.
+
+## Validating downloaded chart dependency versions
+
+Always check this, on every run of this skill, before adding or changing any tests — not only when the request
+mentions dependencies. Rendered subchart behavior depends on the actual code in `charts/`, so a stale or mismatched
+dependency silently invalidates any coverage added for that subchart.
+
+Steps:
+
+1. Read the `dependencies:` list in the root `Chart.yaml` (each entry's `name` and `version`).
+2. For each dependency, find its counterpart in the `charts/` folder:
+   - packaged form: `charts/<name>-<version>.tgz`
+   - extracted form: `charts/<name>/Chart.yaml` (read its own `version` field)
+3. Compare the version found in `charts/` against the version declared in the root `Chart.yaml`.
+4. The quickest scoped check is the Helm CLI itself, run with an isolated, disposable Helm environment (see
+   "Isolating Helm's config, cache, and data dirs" below) from the chart root:
+
+   ```sh
+   HELM_TMP=$(mktemp -d)
+   HELM_CONFIG_HOME="$HELM_TMP/config" HELM_CACHE_HOME="$HELM_TMP/cache" HELM_DATA_HOME="$HELM_TMP/data" \
+     helm dependency list .
+   rm -rf "$HELM_TMP"
+   ```
+
+   Its `STATUS` column reports `ok` when the downloaded chart matches, or flags it when it does not
+   (for example missing or out of date). Treat anything other than `ok` as a mismatch, with one exception: `unpacked`
+   means the dependency is present as an extracted chart directory. Read that directory's own `Chart.yaml` and accept
+   it when its version satisfies the declared requirement; otherwise it is a mismatch.
+5. If the packaged form's filename does not clearly encode the version, unpack the `.tgz` into a temp directory to
+   read the version straight from its own `Chart.yaml` — never into `charts/` itself (see "Unpacking a packaged
+   `.tgz` dependency" below).
+6. If a mismatch is found:
+   - report it clearly before doing anything else (do not silently proceed as if coverage were reliable)
+   - do not run `helm dependency update` or otherwise modify `charts/`, `Chart.yaml`, or `Chart.lock` without asking
+     the user first — resolving the mismatch is a separate decision from adding test coverage
+   - if the user asks you to resolve it, use `helm dependency update .` and confirm the resulting `charts/` contents
+     and `Chart.lock` afterward
+7. If versions match, note that the check passed and continue with the normal workflow.
+
+### Unpacking a packaged `.tgz` dependency
+
+When a packaged dependency needs to be opened to confirm its version, extract it into a scratch temp directory and
+remove it afterward — never extract it into `charts/`. An extracted copy left next to the `.tgz` changes Helm's
+build/hydration behavior and must never be committed.
+
+```sh
+tgz_tmp=$(mktemp -d)
+tar -xzf charts/<name>-*.tgz -C "$tgz_tmp"
+grep '^version:' "$tgz_tmp/<name>/Chart.yaml"
+rm -rf "$tgz_tmp"
+```
+
+### Isolating Helm's config, cache, and data dirs
+
+Never let a local `helm` command read from or write to the invoking user's real Helm state
+(`~/.config/helm`, `~/.cache/helm`, `~/.local/share/helm`). Point Helm at a scratch temp directory instead, the same
+way the Docker validation commands already isolate `HOME` (see "Validation commands" below):
+
+```sh
+HELM_TMP=$(mktemp -d)
+HELM_CONFIG_HOME="$HELM_TMP/config" HELM_CACHE_HOME="$HELM_TMP/cache" HELM_DATA_HOME="$HELM_TMP/data" \
+  helm dependency list .
+rm -rf "$HELM_TMP"
+```
+
+Set all three Helm directory variables. An exported `HELM_CONFIG_HOME`, `HELM_CACHE_HOME`, or `HELM_DATA_HOME` (and
+the XDG variables) takes precedence over `HOME`, so a `HOME`-only override can still read or modify the user's Helm
+state. Always remove the temp directory afterward.
 
 ## What to test directly
 
@@ -110,12 +199,14 @@ Only add tests for resources that consume those values. If a template is static 
 consume root value file configuration, treat it as out of scope for value file-driven coverage requests.
 
 Prefer exact assertions for:
+
 - booleans rendered as strings in configmaps
 - fixed labels or annotations
 - fixed host paths
 - presence or absence of named selectors
 
 Prefer regex assertions for:
+
 - resource presence or patterns
 - image prefixes/suffixes
 - content where exact formatting may vary
@@ -161,12 +252,14 @@ snapshot, make that explicit in the name. If it checks a specific behavior, name
 implying broader coverage.
 
 Examples of good direct assertions added in this session:
+
 - configmap key `data.NATIVE_NFTABLES`
 - owning-resource label derived from override values
 - worker affinity selector key presence or absence
 - k3s-specific CNI host paths derived from platform profile behavior
 
 Also from this session:
+
 - if a parent path is already asserted as absent, avoid adding redundant nested `notExists` assertions below that path
 - remove assertions that do not verify value-driven behavior and do not protect a realistic regression risk
 
@@ -175,6 +268,7 @@ Also from this session:
 When an environment has its own value file, test that environment explicitly.
 
 Examples:
+
 - if `values-sf-k8s03-dev.yaml` is in hydration scope, add tests that use it directly
 - if dev and prod share the same values file set, a shared test may be sufficient
 - if a cluster-specific values file changes behavior, avoid hiding it inside a generic dev/prod test
@@ -186,6 +280,7 @@ Examples:
 Be careful with Helm merge behavior.
 
 Important lesson from this session:
+
 - setting a nested map to `{}` may not remove inherited keys
 - setting the parent value to `~` can null out inherited configuration completely
 
@@ -204,6 +299,7 @@ This is appropriate when the intent is to remove inherited affinity entirely.
 Some templates are rendered only when specific API versions exist in Helm capabilities.
 
 When writing unittest coverage for these templates:
+
 - only add them for value file-driven coverage if the template consumes root value file settings
 - add `capabilities.apiVersions` in the suite so the template is rendered in tests
 - prefer direct assertions for core fields (apiVersion, kind, metadata.name, targetRef, update policy)
@@ -253,6 +349,7 @@ Examples:
 ## Refactoring and organization guidance
 
 When adding coverage:
+
 - prefer extending an existing suite for the same resource
 - avoid creating tiny one-off suite files if the tests belong naturally in an existing file
 - reuse anchors where sensible for templates, values, selectors, and assertion paths
@@ -311,6 +408,9 @@ When coverage changes are complete and tests are green:
 ## Deliverable expectations
 
 When done, report:
+
+- whether downloaded dependency chart versions in `charts/` matched the versions declared in `Chart.yaml`, and any
+  mismatch found
 - which value files were considered in scope
 - which override keys are explicitly covered now
 - which gaps remain, if any
@@ -327,6 +427,15 @@ instead of reporting it as a gap.
 
 ## Anti-patterns to avoid
 
+- skipping the `charts/` vs `Chart.yaml` dependency version check, or only running it when the request mentions
+  dependencies
+- silently proceeding with coverage work when a dependency version mismatch was found instead of reporting it first
+- running `helm dependency update` or otherwise modifying `charts/`, `Chart.yaml`, or `Chart.lock` without asking
+  the user first
+- extracting a packaged `.tgz` dependency directly into `charts/` instead of a disposable temp directory
+- leaving unpacked `.tgz` scratch directories behind instead of removing them after the version check
+- running local `helm` commands against the invoking user's real `~/.config/helm`, `~/.cache/helm`, or
+  `~/.local/share/helm` instead of an isolated temp `HOME`
 - treating snapshots as sufficient for all important overrides
 - counting snapshot-only tests as override coverage
 - using vague suite or case names that do not describe the asserted behavior
