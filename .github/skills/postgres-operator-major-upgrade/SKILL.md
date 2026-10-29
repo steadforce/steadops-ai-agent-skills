@@ -3,7 +3,7 @@ name: postgres-operator-major-upgrade
 description: >-
   Use when raising the major PostgreSQL version of a Zalando postgres-operator cluster in place
   (for example 14 to 15): rehearsal, backups, maintenance window, and the Argo CD interplay.
-version: 1.0.2
+version: 1.0.3
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -91,6 +91,9 @@ Read the Copilot review after the push.
    healthy upgrade changes: database size, catalog contents, statistics, extension versions.
 3. Patch `spec.postgresql.version`. Wait for status `Running`, `PGVERSION` of every pod at the target, every pod
    ready, every Patroni member healthy, and `server_version_num` of the target on every pod (up to 40 minutes).
+   `PGVERSION` and status `Running` do not prove the upgrade ran: the operator recreates the pods first and may then
+   skip the in-place upgrade (see "The operator skipped the upgrade" below). Read its log right after the pods are
+   back, and trust `server_version_num` only.
 4. Compare the facts. Run `ANALYZE` if tables have no statistics. Stop on a difference in an invariant.
 5. Take a WAL-G base backup for the new lineage with the Spilo backup script and check that the newest entry is newer
    than the upgrade. Do this before the application is switched on. If it fails, hold with the application off and
@@ -109,6 +112,26 @@ itself.
 
 Ask the user to log in, push, and run a workflow. Clean up the clone leftovers (NFS directories, PV objects, WAL
 prefixes) by hand with the owner. Plan the operator and Spilo upgrade as its own window.
+
+### The operator skipped the upgrade
+
+Symptom: the operator log (`kubectl logs -n <operator namespace> deploy/postgres-operator`) says `skipping major
+version upgrade, replica <pod> is not streaming from primary`; the pods run with the new `PGVERSION`, but
+`server_version_num` is still the old one. The operator checks replication about one second after it recreated the
+last pod, so a replica that is not streaming yet is enough. Nothing was changed in the data.
+
+1. Wait until Patroni shows all replicas `streaming` with lag 0. Keep the application off.
+2. On the leader, as the `postgres` user, run `python3 /scripts/inplace_upgrade.py <number of members>` (the member
+   count including the leader, for example 3). It is what the operator would have run, asks nothing, and writes to
+   stderr, so pipe it through `tee`. It checks the member count, that the replicas stream with at most 16 MB lag, and
+   `pg_upgrade --check` before it changes anything; it does not check free space.
+3. A failure before `pg_upgrade` runs leaves the old data directory in place; read the `..._upgrade` directory next to
+   the data directory. There is no automatic rollback after the switch: restore as in the Constraints.
+4. When it exits 0, verify `server_version_num` on every pod and the facts (step 4), then go on with the base backup
+   (step 5). The script also starts a Spilo base backup of its own; still check that the newest entry is newer than
+   the upgrade.
+5. Selecting pods by `cluster-name` alone also matches the Completed logical-backup pods (`0/1`): add
+   `application=spilo`, or a readiness check never passes.
 
 ## Report
 
