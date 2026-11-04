@@ -3,7 +3,7 @@ name: crossplane-stepwise-upgrade
 description: >-
   Use when upgrading Crossplane and its providers on a production cluster that deploys from Git: the supported
   upgrade path, blockers to check, provider family handling, and the transients to expect after a provider restart.
-version: 1.0.0
+version: 1.1.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -32,16 +32,30 @@ Use it with `prod-tag-promotion`: every step is one promotion of a `main` commit
 - Check the blockers on the live cluster before step one: Compositions, XRDs, Usages, EnvironmentConfigs, objects of
   kinds that v2 removes (ControllerConfig), external secret stores, and package names that are not fully qualified.
   Production that uses none of them has a short list of risks.
-- The package manager never upgrades an installed dependency. A provider that needs a matching family provider stays
-  stuck on the old family. Define the family `Provider` in Git under the name of the auto-installed one (it adopts it)
-  and move both together. Do not stop on a commit that moves the provider to a new major version without that
-  definition.
+- The package manager never upgrades an installed dependency. A provider version can declare its family provider with
+  an exact version (`dependsOn: provider-family-aws, version v1.23.2`) where the old one only asked for `>= 0.0.0`.
+  With the older family installed, the new provider revision becomes `Active` but unhealthy (`incompatible
+  dependencies: existing package ...provider-family-aws@v1.17.0 is incompatible with constraint v1.23.2`), and the old
+  revision goes `Inactive` and its pod is removed, so no provider pod runs until this is fixed. Before every provider
+  step read `dependsOn` of the target package (pull the package image and read `package.yaml`). If the family
+  constraint is not met, upgrade the family first by patching the auto-installed `Provider` to the exact version: the
+  old provider keeps running because its constraint is loose, the family is healthy after about a minute, and the
+  provider step is healthy about 75 seconds after the tag move. Patching the family while the provider is stuck also
+  recovers it (healthy after about 90 seconds). From the provider major version on, define the family `Provider` in Git
+  under the name of the auto-installed one (it adopts it) and move both together (healthy after about 160 seconds in
+  the rehearsal below). A production tag points at a commit, so a provider bump in an earlier commit cannot be skipped
+  by moving to a later core step.
 - A core step cannot be undone (v2 to v1 is not supported): fix forward. A provider step can be rolled back by moving
   the tag back, because Crossplane keeps the old provider revision.
 - The core image may come from another registry in the new version. Check that the cluster can pull it; a pull failure
   leaves the old pod running during the rollout.
 - Give buckets and other stateful managed resources `deletionPolicy: Orphan`, and find out what depends on Crossplane.
   A backup tool that writes to the bucket directly does not.
+- Rehearse a provider step in a `kind` cluster that reproduces production: Crossplane core at the production version,
+  the family and the provider installed by hand at the production versions (the Lock and the revision names then equal
+  production). When the cluster API port is not reachable from your shell (a remote or separate container daemon), drive
+  the cluster with `docker exec <node> kubectl --kubeconfig=/etc/kubernetes/admin.conf`, and pipe `helm template` output
+  into `kubectl apply --server-side -f -`. Delete the cluster afterwards.
 
 ## Workflow
 
@@ -50,7 +64,9 @@ Use it with `prod-tag-promotion`: every step is one promotion of a `main` commit
 2. **Step table**: list the `main` commits since the production tag and pick one per step (core, provider, family).
    Skip reverted commits. Put the table in the promotion script header.
 3. **Per step**: guard that the live versions equal the previous step, export the Providers, runtime configs,
-   ProviderConfigs, managed resources, and the package lock, then promote. Verify the core image tag, the provider
+   ProviderConfigs, managed resources, and the package lock. For a provider step compare `dependsOn` of the target
+   package with the installed family (see Constraints) and upgrade the family first when it does not satisfy it. Then
+   promote. Verify the core image tag, the provider
    packages (Installed and Healthy), the managed resources (Synced, Ready, spec unchanged), all pods Ready, 60 seconds
    without restarts, and the logs.
 4. **Expect transients after a provider pod is replaced**:
