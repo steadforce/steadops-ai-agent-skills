@@ -3,6 +3,7 @@
 Complete guide to commit message formatting, line wrapping, and conventions.
 
 ## Contents
+
 - Subject line rules
 - Body format and wrapping
 - Long URLs
@@ -113,7 +114,7 @@ Fix #847: Add CPU arch filter
 
 ## Full Example
 
-```
+```text
 Add CPU arch filter scheduler support
 
 In a mixed environment of x86 and ARM nodes, the scheduler
@@ -143,6 +144,7 @@ chore(deps): update lodash to 4.17.21
 ```
 
 **Common types:**
+
 - `feat:` - new feature
 - `fix:` - bug fix
 - `chore:` - maintenance
@@ -155,7 +157,7 @@ All other rules still apply (imperative, 72-char limit includes prefix, body exp
 
 ## Gotchas
 
-- **72-char limit includes type prefix** — `feat(scheduler): ` counts toward 72
+- **72-char limit includes type prefix** — `feat(scheduler):` counts toward 72
 - **Blank line is critical** — many tools parse on this boundary
 - **Issue refs in body, not subject** — keeps subject meaningful
 - **URLs break wrapping rule** — put on own line

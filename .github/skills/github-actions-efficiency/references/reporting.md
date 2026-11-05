@@ -1,6 +1,7 @@
 # Efficiency Reporting and Follow-Up Review
 
-Load this reference when the user asks what changed, wants a before/after report, or asks for another pass over remaining expensive jobs.
+Load this reference when the user asks what changed, wants a before/after report, or asks for another pass over
+remaining expensive jobs.
 
 ## Reporting Rules
 
@@ -10,7 +11,8 @@ Load this reference when the user asks what changed, wants a before/after report
 
 Use this phrasing when data is incomplete:
 
-`I can report the efficiency mechanisms that changed, but I cannot honestly claim exact minutes saved without comparing before/after GitHub Actions runs.`
+`I can report the efficiency mechanisms that changed, but I cannot honestly claim exact minutes saved without
+comparing before/after GitHub Actions runs.`
 
 ## What To Measure
 

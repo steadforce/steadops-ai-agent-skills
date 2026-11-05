@@ -77,7 +77,8 @@ Implements /health that returns 200 when DB healthy.
 
 ## Platform-Specific Notes
 
-**Keywords are case-insensitive:** `Fixes #123` = `fixes #123`. See platform docs for issue linking: GitHub (`Fixes #N`), GitLab (`Closes #N`), Jira (`PROJ-123`), Gerrit (auto `Change-Id`).
+**Keywords are case-insensitive:** `Fixes #123` = `fixes #123`. See platform docs for issue linking:
+GitHub (`Fixes #N`), GitLab (`Closes #N`), Jira (`PROJ-123`), Gerrit (auto `Change-Id`).
 
 ## Gotchas
 

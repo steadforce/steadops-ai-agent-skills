@@ -30,6 +30,7 @@ Use this skill when asked to reduce duplication in Helm unittest files while kee
 ## When to use
 
 Use this skill for requests like:
+
 - "Refactor Helm unittest tests"
 - "Deduplicate test suites with YAML anchors"
 - "Make anchors consistent across *_test.yaml"
@@ -220,6 +221,7 @@ docker run --rm -u $(id -u) -e HOME=/tmp \
 ```
 
 Success criteria:
+
 - all suites pass
 - snapshots pass after update or are intentionally updated locally
 - no strict parse errors introduced by anchors
@@ -251,6 +253,7 @@ After tests pass and before final reporting:
 ## Deliverable expectations
 
 When done, report:
+
 - files changed
 - notable anchor decisions
 - test command used
