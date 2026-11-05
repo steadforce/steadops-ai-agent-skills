@@ -3,7 +3,7 @@ name: gitea-helm-upgrade
 description: >-
   Use when promoting a Gitea Helm chart or application upgrade to production: schema migration, backup guard,
   removed config and API routes, runner pods, and verification.
-version: 1.0.2
+version: 1.1.0
 category: Operations Workflow
 license: MIT
 compatibility: opencode
@@ -39,7 +39,10 @@ Use it with `prod-tag-promotion` for every Gitea chart or application bump. Gite
 - Do not assume that nothing else uses Gitea. Look at every workload that calls it (runners, exporters, webhooks,
   init containers).
 - Expect a short outage and measure it. Gitea 1.25 took about 30 seconds and 1.26 about 110 seconds on the production
-  database.
+  database; 28.3.0 took about 36 seconds (schema 343 to 358).
+- Start the logical backup yourself when the last one is older than three hours (about 70 minutes; see
+  `prod-tag-promotion`) and read WAL archiving on the master before the tag moves:
+  `select last_archived_time, failed_count from pg_stat_archiver` (failed 0, last archive a few minutes old).
 
 ## Workflow
 
@@ -49,6 +52,14 @@ List removed or renamed settings, routes, and environment handling, then compare
 Examples: from 1.26 the chart writes `app.ini` with `gitea config edit-ini --apply-env` and not with
 `environment-to-ini`; 1.26 adds cross-origin protection for browser POSTs through proxies; deprecated authentication
 sources disappear in 1.25.
+
+Gitea 28 follows 1.27.3 (the 1.x line ended there). It renames the outbound host settings: `[migrations]
+ALLOWED_DOMAINS` becomes `ALLOWED_HOST_LIST` plus `EGRESS_MODE` (`strict` for an explicit list), `[security]` takes
+`ALLOWED_HOST_LIST` with `EGRESS_MODE=lax`, and a bare `*` is invalid (use `private,loopback`). `[actions]
+RUN_RETENTION_DAYS` sets the run retention. Job-level `if:` is evaluated before the matrix, `fail-fast` is enforced, and
+nested workflows have permission limits: tell the workflow owners. After the first start expect one `[E]` deprecation
+line while `[migrations].ALLOWED_DOMAINS` is still in the persisted `app.ini`, possibly `[E]` lines for empty legacy
+files in `/data/gitea/public` (move them away), and a warning that the old bleve index is rebuilt.
 
 A setting that you remove from the chart values does NOT leave the configuration. The init step merges the rendered
 config into the `app.ini` on the data volume (`gitea config edit-ini --apply-env`), so a renamed or moved key keeps its
@@ -74,14 +85,18 @@ all runner pods, and a running job gets the termination grace period to finish b
 ### 4. Test on dev, then promote
 
 On dev check the version, the schema migration in the log, login through the identity provider, a push, a workflow
-run, and the pods the change touches. Promote with the guarded procedure of `prod-tag-promotion`.
+run, a WebSocket request to `/-/ws` through the ingress (101 over HTTP/1.1), and the pods the change touches. Promote with the guarded procedure of
+`prod-tag-promotion`.
 
 ### 5. Verify
 
 - Application Synced and Healthy on the target commit; Gitea pod 1/1 on the new image; health 200 on all hosts; the
-  version endpoint; SSH port; no `[E]` or `[C]` lines since the start; all ExternalSecrets synced.
+  version endpoint; SSH port; no `[E]` or `[C]` lines since the start except the known deprecation line; all
+  ExternalSecrets synced.
 - Runners: StatefulSet updated, ready, and desired replicas equal; no pod in `Init`, `CrashLoopBackOff`, or `Error`
-  (an autoscaler may have raised the desired count); every runner declared itself in its log.
+  (an autoscaler may have raised the desired count). Runners whose pod template did not change keep their pods and do
+  not log `declare successfully` again, so check that `failed to fetch task` errors stop after the outage instead. A
+  KEDA-scaled pool may have no pods at all when idle.
 - Run `gitea-smoke-test`.
 
 ## Report
